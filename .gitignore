@@ -21,3 +21,12 @@ npm-debug.log*
 # Environment
 .env
 .env.local
+
+# Claude Code
+.claude/
+
+# Research notes
+research.md
+
+# Temp files
+nul
