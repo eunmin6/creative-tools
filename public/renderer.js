@@ -495,6 +495,13 @@ let drawStartY = 0;
 let isSelectionBoxDragging = false; // 선택 박스 드래그 중
 let selectionBoxStart = { x: 0, y: 0 }; // 선택 박스 시작 지점
 
+// 무한 캔버스를 위한 뷰포트 오프셋
+let viewportOffsetX = 0;
+let viewportOffsetY = 0;
+let isPanning = false; // 캔버스 패닝 중
+let panStartX = 0;
+let panStartY = 0;
+
 // 캔버스 에디터 열기 (탭용)
 function openCanvasEditorForTab(tab) {
   currentFilePath = tab.filePath;
@@ -553,6 +560,22 @@ function openCanvasEditorForTab(tab) {
   });
 }
 
+// 월드 좌표를 화면 좌표로 변환 (뷰포트 offset 적용)
+function worldToScreen(x, y) {
+  return {
+    x: x + viewportOffsetX,
+    y: y + viewportOffsetY
+  };
+}
+
+// 화면 좌표를 월드 좌표로 변환 (뷰포트 offset 제거)
+function screenToWorld(x, y) {
+  return {
+    x: x - viewportOffsetX,
+    y: y - viewportOffsetY
+  };
+}
+
 // 도형 렌더링
 function renderShapes() {
   const container = document.getElementById('canvas-container');
@@ -574,8 +597,10 @@ function renderShapes() {
       const maxX = Math.max(shape.x, shape.x + shape.width);
       const maxY = Math.max(shape.y, shape.y + shape.height);
 
-      shapeEl.style.left = minX + 'px';
-      shapeEl.style.top = minY + 'px';
+      // 뷰포트 오프셋 적용
+      const screenPos = worldToScreen(minX, minY);
+      shapeEl.style.left = screenPos.x + 'px';
+      shapeEl.style.top = screenPos.y + 'px';
       shapeEl.style.width = (maxX - minX) + 'px';
       shapeEl.style.height = (maxY - minY) + 'px';
       shapeEl.style.cursor = 'move';
@@ -742,8 +767,11 @@ function renderShapes() {
       shapeEl.className = 'canvas-shape';
       shapeEl.dataset.index = index;
       shapeEl.style.position = 'absolute';
-      shapeEl.style.left = shape.x + 'px';
-      shapeEl.style.top = shape.y + 'px';
+
+      // 뷰포트 오프셋 적용
+      const screenPos = worldToScreen(shape.x, shape.y);
+      shapeEl.style.left = screenPos.x + 'px';
+      shapeEl.style.top = screenPos.y + 'px';
       shapeEl.style.width = shape.width + 'px';
       shapeEl.style.height = shape.height + 'px';
       shapeEl.style.cursor = 'move';
@@ -1142,8 +1170,10 @@ function handleCanvasMouseDown(e) {
   // 그리기 모드인 경우
   if (drawingMode) {
     isDrawing = true;
-    drawStartX = e.clientX - rect.left;
-    drawStartY = e.clientY - rect.top;
+    // 화면 좌표를 월드 좌표로 변환
+    const worldPos = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+    drawStartX = worldPos.x;
+    drawStartY = worldPos.y;
 
     // 새 도형 추가 (시작점에서 크기 0으로)
     canvasData.shapes.push({
@@ -1162,10 +1192,14 @@ function handleCanvasMouseDown(e) {
   const shapeEl = e.target.closest('.canvas-shape');
 
   if (!shapeEl) {
-    // 빈 공간 클릭: 선택 해제
+    // 빈 공간 클릭: 캔버스 패닝 시작 (Ctrl 키 없이)
     if (!e.ctrlKey) {
+      isPanning = true;
+      panStartX = e.clientX;
+      panStartY = e.clientY;
       selectedShape = null;
       selectedShapes = [];
+      container.style.cursor = 'grabbing';
     }
     renderShapes();
     return;
@@ -1209,9 +1243,10 @@ function handleCanvasMouseDown(e) {
     if (!isConnectedLine) {
       isDragging = true;
       resizeHandle = null;
-      // 마우스 클릭 위치와 도형 위치의 오프셋 계산
-      dragStartX = e.clientX - rect.left - canvasData.shapes[index].x;
-      dragStartY = e.clientY - rect.top - canvasData.shapes[index].y;
+      // 마우스 클릭 위치와 도형 위치의 오프셋 계산 (월드 좌표계)
+      const worldPos = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+      dragStartX = worldPos.x - canvasData.shapes[index].x;
+      dragStartY = worldPos.y - canvasData.shapes[index].y;
 
       // 다중 선택된 도형 중 하나를 클릭한 경우
       if (selectedShapes.length > 0 && selectedShapes.includes(index)) {
@@ -1231,10 +1266,27 @@ function handleCanvasMouseMove(e) {
   const container = document.getElementById('canvas-container');
   const rect = container.getBoundingClientRect();
 
+  // 캔버스 패닝 처리
+  if (isPanning) {
+    const deltaX = e.clientX - panStartX;
+    const deltaY = e.clientY - panStartY;
+
+    viewportOffsetX += deltaX;
+    viewportOffsetY += deltaY;
+
+    panStartX = e.clientX;
+    panStartY = e.clientY;
+
+    renderShapes();
+    return;
+  }
+
   // 그리기 모드인 경우
   if (isDrawing && selectedShape !== null) {
-    const currentX = e.clientX - rect.left;
-    const currentY = e.clientY - rect.top;
+    // 화면 좌표를 월드 좌표로 변환
+    const worldPos = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+    const currentX = worldPos.x;
+    const currentY = worldPos.y;
 
     const shape = canvasData.shapes[selectedShape];
     const width = currentX - drawStartX;
@@ -1274,10 +1326,11 @@ function handleCanvasMouseMove(e) {
   if (selectedShape === null) return;
 
   if (isDragging) {
-    // 드래그 이동
+    // 드래그 이동 (월드 좌표계)
     const shape = canvasData.shapes[selectedShape];
-    shape.x = e.clientX - rect.left - dragStartX;
-    shape.y = e.clientY - rect.top - dragStartY;
+    const worldPos = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+    shape.x = worldPos.x - dragStartX;
+    shape.y = worldPos.y - dragStartY;
 
     // 사각형이 이동할 때 연결된 선들도 업데이트
     if (shape.type === 'rectangle') {
@@ -1442,6 +1495,17 @@ function handleCanvasMouseMove(e) {
 }
 
 function handleCanvasMouseUp() {
+  const container = document.getElementById('canvas-container');
+
+  // 패닝 완료
+  if (isPanning) {
+    isPanning = false;
+    if (container) {
+      container.style.cursor = '';
+    }
+    return;
+  }
+
   // 그리기 완료
   if (isDrawing) {
     isDrawing = false;
