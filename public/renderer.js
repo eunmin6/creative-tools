@@ -1209,6 +1209,12 @@ function handleCanvasMouseDown(e) {
 
   // Ctrl+클릭: 다중 선택
   if (e.ctrlKey) {
+    // 단일 선택 모드였다면 그 도형을 다중 선택에 추가
+    if (selectedShape !== null && selectedShapes.length === 0) {
+      selectedShapes.push(selectedShape);
+      selectedShape = null;
+    }
+
     const shapeIndex = selectedShapes.indexOf(index);
     if (shapeIndex > -1) {
       // 이미 선택된 경우 제거
@@ -1217,7 +1223,6 @@ function handleCanvasMouseDown(e) {
       // 선택 추가
       selectedShapes.push(index);
     }
-    selectedShape = null; // 단일 선택 모드 해제
     renderShapes();
     return;
   }
