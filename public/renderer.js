@@ -1339,7 +1339,8 @@ function handleCanvasMouseMove(e) {
   }
 
   if (!isDragging && !isResizing) return;
-  if (selectedShape === null) return;
+  // 다중 선택 모드가 아닌 경우에만 selectedShape null 체크
+  if (selectedShape === null && selectedShapes.length === 0) return;
 
   if (isDragging) {
     // 드래그 이동 (월드 좌표계)
