@@ -724,7 +724,7 @@ function renderShapes() {
 
         polyline.setAttribute('points', points);
         polyline.setAttribute('fill', 'none');
-        polyline.setAttribute('stroke', selectedShape === index ? '#007acc' : '#616161');
+        polyline.setAttribute('stroke', (selectedShape === index || selectedShapes.includes(index)) ? '#007acc' : '#616161');
         polyline.setAttribute('stroke-width', '3');
         polyline.setAttribute('stroke-linecap', 'round');
         polyline.setAttribute('stroke-linejoin', 'round');
@@ -744,7 +744,7 @@ function renderShapes() {
         line.setAttribute('y1', y1);
         line.setAttribute('x2', x2);
         line.setAttribute('y2', y2);
-        line.setAttribute('stroke', selectedShape === index ? '#007acc' : '#616161');
+        line.setAttribute('stroke', (selectedShape === index || selectedShapes.includes(index)) ? '#007acc' : '#616161');
         line.setAttribute('stroke-width', '3');
         line.setAttribute('stroke-linecap', 'round');
 
@@ -753,11 +753,13 @@ function renderShapes() {
 
       shapeEl.appendChild(svg);
 
-      // 선택된 도형 표시
-      if (selectedShape === index) {
+      // 선택된 도형 표시 (단일 선택 또는 다중 선택)
+      if (selectedShape === index || selectedShapes.includes(index)) {
         shapeEl.style.filter = 'drop-shadow(0 0 4px rgba(0, 122, 204, 0.6))';
-        // 직선의 양 끝점에만 핸들 추가
-        addLineHandles(shapeEl, shape, minX, minY);
+        // 직선의 양 끝점에만 핸들 추가 (단일 선택일 때만)
+        if (selectedShape === index) {
+          addLineHandles(shapeEl, shape, minX, minY);
+        }
       }
 
       container.appendChild(shapeEl);
@@ -782,13 +784,15 @@ function renderShapes() {
         shapeEl.style.borderRadius = '50%';
       }
 
-      // 선택된 도형 표시
-      if (selectedShape === index) {
+      // 선택된 도형 표시 (단일 선택 또는 다중 선택)
+      if (selectedShape === index || selectedShapes.includes(index)) {
         shapeEl.style.border = '2px solid #007acc';
         shapeEl.style.boxShadow = '0 0 8px rgba(0, 122, 204, 0.6)';
 
-        // 리사이즈 핸들 추가
-        addResizeHandles(shapeEl);
+        // 리사이즈 핸들 추가 (단일 선택일 때만)
+        if (selectedShape === index) {
+          addResizeHandles(shapeEl);
+        }
       }
 
       // 사각형에는 연결점 추가 (직선 그리기 모드이거나 직선을 그리는 중일 때)
