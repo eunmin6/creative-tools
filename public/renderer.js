@@ -1223,17 +1223,24 @@ function handleCanvasMouseDown(e) {
     if (shapeIndex > -1) {
       // 이미 선택된 경우 제거
       selectedShapes.splice(shapeIndex, 1);
+      renderShapes();
+      return;
     } else {
       // 선택 추가
       selectedShapes.push(index);
+      renderShapes();
+      return;
     }
-    renderShapes();
-    return;
   }
 
-  // 일반 클릭
-  selectedShape = index;
-  selectedShapes = []; // 다중 선택 해제
+  // 다중 선택된 도형 중 하나를 클릭한 경우, 다중 선택 유지하고 드래그 준비
+  if (selectedShapes.length > 0 && selectedShapes.includes(index)) {
+    // 드래그 준비 계속 진행 (아래 코드 실행)
+  } else {
+    // 일반 클릭: 단일 선택
+    selectedShape = index;
+    selectedShapes = []; // 다중 선택 해제
+  }
 
   // 리사이즈 핸들 클릭 확인
   if (e.target.classList.contains('resize-handle')) {
