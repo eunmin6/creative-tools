@@ -1327,14 +1327,35 @@ function handleCanvasMouseMove(e) {
 
   if (isDragging) {
     // 드래그 이동 (월드 좌표계)
-    const shape = canvasData.shapes[selectedShape];
     const worldPos = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
-    shape.x = worldPos.x - dragStartX;
-    shape.y = worldPos.y - dragStartY;
 
-    // 사각형이 이동할 때 연결된 선들도 업데이트
-    if (shape.type === 'rectangle') {
-      updateConnectedLines(selectedShape);
+    // 다중 선택된 도형들을 함께 이동
+    if (originalShapesData.length > 0) {
+      // 마우스 이동량 계산
+      const deltaX = worldPos.x - (originalShapesData[0].data.x + dragStartX);
+      const deltaY = worldPos.y - (originalShapesData[0].data.y + dragStartY);
+
+      // 모든 선택된 도형 이동
+      originalShapesData.forEach(item => {
+        const shape = canvasData.shapes[item.index];
+        shape.x = item.data.x + deltaX;
+        shape.y = item.data.y + deltaY;
+
+        // 사각형이 이동할 때 연결된 선들도 업데이트
+        if (shape.type === 'rectangle') {
+          updateConnectedLines(item.index);
+        }
+      });
+    } else {
+      // 단일 도형 이동
+      const shape = canvasData.shapes[selectedShape];
+      shape.x = worldPos.x - dragStartX;
+      shape.y = worldPos.y - dragStartY;
+
+      // 사각형이 이동할 때 연결된 선들도 업데이트
+      if (shape.type === 'rectangle') {
+        updateConnectedLines(selectedShape);
+      }
     }
   } else if (isResizing && originalShapeData) {
     // 리사이즈
