@@ -1259,18 +1259,23 @@ function handleCanvasMouseDown(e) {
     if (!isConnectedLine) {
       isDragging = true;
       resizeHandle = null;
-      // 마우스 클릭 위치와 도형 위치의 오프셋 계산 (월드 좌표계)
       const worldPos = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
-      dragStartX = worldPos.x - canvasData.shapes[index].x;
-      dragStartY = worldPos.y - canvasData.shapes[index].y;
 
       // 다중 선택된 도형 중 하나를 클릭한 경우
       if (selectedShapes.length > 0 && selectedShapes.includes(index)) {
+        // 드래그 시작 위치 저장 (마우스의 월드 좌표)
+        dragStartX = worldPos.x;
+        dragStartY = worldPos.y;
+
         // 모든 선택된 도형의 원본 데이터 저장
         originalShapesData = selectedShapes.map(i => ({
           index: i,
           data: { ...canvasData.shapes[i] }
         }));
+      } else {
+        // 단일 선택: 마우스 클릭 위치와 도형 위치의 오프셋 계산
+        dragStartX = worldPos.x - canvasData.shapes[index].x;
+        dragStartY = worldPos.y - canvasData.shapes[index].y;
       }
     }
   }
@@ -1348,9 +1353,9 @@ function handleCanvasMouseMove(e) {
 
     // 다중 선택된 도형들을 함께 이동
     if (originalShapesData.length > 0) {
-      // 마우스 이동량 계산
-      const deltaX = worldPos.x - (originalShapesData[0].data.x + dragStartX);
-      const deltaY = worldPos.y - (originalShapesData[0].data.y + dragStartY);
+      // 마우스 이동량 계산 (드래그 시작 지점으로부터의 변화량)
+      const deltaX = worldPos.x - dragStartX;
+      const deltaY = worldPos.y - dragStartY;
 
       // 모든 선택된 도형 이동
       originalShapesData.forEach(item => {
