@@ -1489,6 +1489,11 @@ function handleCanvasMouseMove(e) {
         }
         break;
     }
+
+    // 사각형 리사이즈 시 연결된 선들도 업데이트
+    if (shape.type === 'rectangle') {
+      updateConnectedLines(selectedShape);
+    }
   }
 
   renderShapes();
