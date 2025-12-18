@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Code Editor</title>
+    <link rel="stylesheet" href="codicon.css">
     <style>
         * {
             margin: 0;
@@ -79,6 +80,12 @@
             color: #cccccc;
         }
 
+        .titlebar-button.maximize span {
+            font-size: 20px;
+            line-height: 30px;
+            margin-top: -4px;
+        }
+
         .titlebar-button:hover {
             background: #3e3e42;
         }
@@ -115,6 +122,7 @@
             position: relative;
             color: #858585;
             transition: color 0.2s;
+            margin: 4px 0;
         }
 
         .activity-bar-item:hover {
@@ -141,6 +149,10 @@
             fill: currentColor;
         }
 
+        .activity-bar-item .codicon {
+            font-size: 24px !important;
+        }
+
         /* 사이드바 (Explorer) */
         .sidebar {
             width: 250px;
@@ -148,6 +160,25 @@
             display: flex;
             flex-direction: column;
             border-right: 1px solid #2d2d2d;
+            flex-shrink: 0;
+        }
+
+        /* 사이드바 리사이저 */
+        .sidebar-resizer {
+            width: 4px;
+            background: transparent;
+            cursor: col-resize;
+            position: relative;
+            flex-shrink: 0;
+            transition: background 0.2s;
+        }
+
+        .sidebar-resizer:hover {
+            background: #007acc;
+        }
+
+        .sidebar-resizer.resizing {
+            background: #007acc;
         }
 
         .sidebar-header {
@@ -240,6 +271,7 @@
         .editor-tab.active {
             background: #1e1e1e;
             color: #ffffff;
+            border-top: 2px solid #007acc;
         }
 
         .editor-tab:hover {
@@ -297,8 +329,9 @@
 
         .chevron {
             display: inline-block;
-            margin-right: 4px;
+            margin-right: 8px;
             transition: transform 0.2s;
+            font-family: 'Microsoft Sans Serif', sans-serif;
         }
 
         .chevron.expanded {
@@ -482,6 +515,44 @@
         .toast.removing {
             animation: slideOut 0.3s ease-out;
         }
+
+        /* 색상 팔레트 */
+        .color-palette {
+            display: none;
+            position: fixed;
+            top: 70px;
+            left: 310px;
+            background: #252526;
+            border: 1px solid #454545;
+            border-radius: 3px;
+            padding: 6px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .color-palette.show {
+            display: flex;
+            gap: 4px;
+        }
+
+        .color-option {
+            width: 18px;
+            height: 18px;
+            border-radius: 2px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .color-option:hover {
+            border-color: #007acc;
+            transform: scale(1.1);
+        }
+
+        .color-option.selected {
+            border-color: #ffffff;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+        }
     </style>
 </head>
 <body>
@@ -517,24 +588,16 @@
         <!-- 왼쪽 아이콘 메뉴바 -->
         <div class="activity-bar">
             <div class="activity-bar-item active" data-view="explorer" title="Explorer">
-                <svg viewBox="0 0 16 16">
-                    <path d="M14.5 2H7.71l-.85-.85L6.51 1h-5l-.5.5v11l.5.5h13l.5-.5v-10L14.5 2zm-.51 8.49V13h-12V7h4.49l.35-.15.86-.86H14v4.5z"/>
-                </svg>
+                <i class="codicon codicon-files"></i>
             </div>
             <div class="activity-bar-item" data-view="search" title="Search">
-                <svg viewBox="0 0 16 16">
-                    <path d="M11.5 7a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0zm-.82 4.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 1 1-1.06 1.06l-3.04-3.04z"/>
-                </svg>
+                <i class="codicon codicon-search"></i>
             </div>
             <div class="activity-bar-item" data-view="git" title="Source Control">
-                <svg viewBox="0 0 16 16">
-                    <path d="M7.5 1L1 7.5 7.5 14 14 7.5 7.5 1zM7.5 12.5L2.5 7.5 7.5 2.5l5 5-5 5z"/>
-                </svg>
+                <i class="codicon codicon-source-control"></i>
             </div>
             <div class="activity-bar-item" data-view="extensions" title="Extensions">
-                <svg viewBox="0 0 16 16">
-                    <path d="M2 2l4-1v12l-4 1V2zm5-1l4 1v12l-4-1V1zm5 1l4-1v12l-4 1V2z"/>
-                </svg>
+                <i class="codicon codicon-extensions"></i>
             </div>
         </div>
 
@@ -596,6 +659,9 @@
             </div>
         </div>
 
+        <!-- 리사이저 -->
+        <div class="sidebar-resizer"></div>
+
         <!-- 메인 에디터 영역 -->
         <div class="main-content">
             <div class="editor-tabs" id="editorTabs">
@@ -633,6 +699,14 @@
     <!-- 토스트 알림 컨테이너 -->
     <div class="toast-container" id="toastContainer"></div>
 
+    <!-- 색상 팔레트 -->
+    <div class="color-palette" id="colorPalette"></div>
+
+    <!-- Monaco Editor 로더 -->
+    <script src="vs/loader.js"></script>
+    <script>
+        require.config({ paths: { vs: 'vs' } });
+    </script>
     <script src="renderer.js"></script>
 </body>
 </html>

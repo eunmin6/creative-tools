@@ -2,6 +2,14 @@
 let openTabs = []; // { filePath, fileName, type, content, originalContent }
 let activeTabIndex = -1;
 
+// Explorer 설정
+let hideSystemFolders = false; // true면 node_modules, dist, .git, .claude 숨김
+const SYSTEM_FOLDERS = ['node_modules', 'dist', '.git', '.claude'];
+
+// Monaco Editor 인스턴스
+let monacoEditor = null;
+let monacoReady = false;
+
 // DOM 로드 완료 시 초기화
 window.addEventListener('DOMContentLoaded', () => {
   initializeApp();
@@ -11,6 +19,35 @@ function initializeApp() {
   loadProjectFiles();
   setupTreeInteraction();
   setupActivityBar();
+  setupSidebarResizer();
+  setupGlobalKeyboardEvents();
+  initMonaco();
+}
+
+// Monaco Editor 초기화
+function initMonaco() {
+  require(['vs/editor/editor.main'], function() {
+    monacoReady = true;
+    // hello
+
+
+    // Monaco 테마 설정 (VSCode Dark 스타일)
+    monaco.editor.defineTheme('custom-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [],
+      colors: {
+        'editor.background': '#1e1e1e',
+        'editor.lineHighlightBackground': '#2a2a2a',
+      }
+    });
+    monaco.editor.setTheme('custom-dark');
+  });
+}
+
+// 전역 키보드 이벤트 설정
+function setupGlobalKeyboardEvents() {
+  document.addEventListener('keydown', handleCanvasKeyDown);
 }
 
 // 프로젝트 파일 로드
@@ -33,18 +70,15 @@ async function loadProjectFiles() {
   // 하위 항목 컨테이너
   const rootChildren = document.createElement('div');
   rootChildren.className = 'tree-item-children expanded';
-  rootChildren.id = 'root-children';
+  rootChildren.id = 'project-children';
 
   // 프로젝트 디렉토리 읽기
   const items = await window.electronAPI.fs.readdir(projectRoot);
 
-  // node_modules와 dist 제외
-  const filteredItems = items.filter(item =>
-    item.name !== 'node_modules' &&
-    item.name !== 'dist' &&
-    item.name !== '.git' &&
-    item.name !== '.claude'
-  );
+  // 시스템 폴더 필터링 (hideSystemFolders가 true일 때만)
+  const filteredItems = hideSystemFolders
+    ? items.filter(item => !SYSTEM_FOLDERS.includes(item.name))
+    : items;
 
   // 디렉토리 먼저, 파일 나중에 정렬
   filteredItems.sort((a, b) => {
@@ -81,17 +115,11 @@ function createFolderElement(name, fullPath, isRoot = false, depth = 0) {
   // depth에 따른 들여쓰기
   folder.style.paddingLeft = `${8 + (depth * 16)}px`;
 
-  if (!isRoot) {
-    const chevron = document.createElement('span');
-    chevron.className = 'chevron';
-    chevron.textContent = '▶';
-    folder.appendChild(chevron);
-  }
-
-  const icon = document.createElement('span');
-  icon.className = 'tree-item-icon';
-  icon.textContent = '📁';
-  folder.appendChild(icon);
+  // 모든 폴더에 chevron 추가 (루트 포함)
+  const chevron = document.createElement('span');
+  chevron.className = isRoot ? 'chevron expanded' : 'chevron';
+  chevron.textContent = '❯';
+  folder.appendChild(chevron);
 
   const label = document.createElement('span');
   label.className = 'tree-item-label';
@@ -110,10 +138,16 @@ function createFileElement(name, fullPath, depth = 0) {
 
   // depth에 따른 들여쓰기 (파일은 폴더보다 조금 더 들여쓰기)
   file.style.paddingLeft = `${8 + (depth * 16)}px`;
+  file.style.display = 'flex';
+  file.style.alignItems = 'center';
 
-  const icon = document.createElement('span');
+  const icon = document.createElement('img');
   icon.className = 'tree-item-icon';
-  icon.textContent = getFileIcon(name);
+  icon.src = getFileIcon(name);
+  icon.style.width = '20px';
+  icon.style.height = '20px';
+  icon.style.marginRight = '6px';
+  icon.style.verticalAlign = 'middle';
   file.appendChild(icon);
 
   const label = document.createElement('span');
@@ -127,19 +161,81 @@ function createFileElement(name, fullPath, depth = 0) {
 // 파일 아이콘 가져오기
 function getFileIcon(filename) {
   const ext = filename.split('.').pop().toLowerCase();
-  const icons = {
-    'js': '📜',
-    'ts': '📘',
-    'json': '📦',
-    'html': '🌐',
-    'css': '🎨',
-    'md': '📝',
-    'txt': '📄',
-    'png': '🖼️',
-    'jpg': '🖼️',
-    'gif': '🖼️'
+  const iconMap = {
+    'js': 'javascript',
+    'mjs': 'javascript',
+    'ts': 'typescript',
+    'tsx': 'react',
+    'jsx': 'react',
+    'json': 'json',
+    'html': 'html',
+    'htm': 'html',
+    'css': 'css',
+    'scss': 'sass',
+    'sass': 'sass',
+    'less': 'less',
+    'md': 'markdown',
+    'markdown': 'markdown',
+    'py': 'python',
+    'java': 'java',
+    'c': 'c',
+    'cpp': 'cpp',
+    'h': 'c',
+    'hpp': 'cpp',
+    'cs': 'c-sharp',
+    'go': 'go',
+    'rb': 'ruby',
+    'php': 'php',
+    'sql': 'db',
+    'xml': 'xml',
+    'yaml': 'yml',
+    'yml': 'yml',
+    'sh': 'shell',
+    'bash': 'shell',
+    'ps1': 'powershell',
+    'vue': 'vue',
+    'jade': 'jade',
+    'pug': 'pug',
+    'svg': 'svg',
+    'png': 'image',
+    'jpg': 'image',
+    'jpeg': 'image',
+    'gif': 'image',
+    'ico': 'image',
+    'pdf': 'pdf',
+    'zip': 'zip',
+    'rar': 'zip',
+    '7z': 'zip',
+    'mp3': 'audio',
+    'wav': 'audio',
+    'mp4': 'video',
+    'avi': 'video',
+    'rs': 'rust',
+    'dart': 'dart',
+    'swift': 'swift',
+    'kt': 'kotlin',
+    'scala': 'scala',
+    'lua': 'lua',
+    'r': 'R',
+    'ex': 'elixir',
+    'exs': 'elixir_script',
+    'erl': 'erlang',
+    'clj': 'clojure',
+    'coffee': 'coffee',
+    'elm': 'elm',
+    'fs': 'f-sharp',
+    'hs': 'haskell',
+    'nim': 'nim',
+    'pl': 'perl',
+    'dockerfile': 'docker',
+    'gitignore': 'git_ignore',
+    'env': 'config',
+    'lock': 'lock',
+    'gradle': 'gradle',
+    'svelte': 'svelte',
   };
-  return icons[ext] || '📄';
+  const iconName = iconMap[ext] || 'default';
+  return `icons/${iconName}.svg`;
 }
 
 // 폴더 내용 로드
@@ -283,7 +379,9 @@ function renderTabs() {
     tabEl.className = 'editor-tab' + (index === activeTabIndex ? ' active' : '');
 
     const tabLabel = document.createElement('span');
-    tabLabel.textContent = tab.fileName;
+    // 수정된 파일이면 * 표시
+    const isModified = hasUnsavedChanges(index);
+    tabLabel.textContent = tab.fileName + (isModified ? ' *' : '');
     tabLabel.style.cursor = 'pointer';
     tabLabel.addEventListener('click', () => switchToTab(index));
 
@@ -335,7 +433,7 @@ function closeTab(index) {
       `Do you want to save the changes you made to ${tab.fileName}?`,
       async () => {
         // Save 버튼 클릭
-        await saveCanvas();
+        await saveCurrentFile();
         performCloseTab(index);
       },
       () => {
@@ -383,20 +481,90 @@ function renderActiveTabContent() {
   const tab = openTabs[activeTabIndex];
   const editorArea = document.querySelector('.editor-area');
 
+  // 기존 Monaco 에디터 정리
+  if (monacoEditor) {
+    monacoEditor.dispose();
+    monacoEditor = null;
+  }
+
   if (tab.type === 'canvas') {
     openCanvasEditorForTab(tab);
   } else {
-    // 텍스트 파일 표시
-    const escapedContent = escapeHtml(tab.content);
-    editorArea.innerHTML = `
-      <div style="padding: 20px;">
-        <div style="color: #858585; margin-bottom: 20px; font-size: 12px;">
-          ${tab.filePath}
-        </div>
-        <pre style="color: #d4d4d4; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word;">${escapedContent}</pre>
-      </div>
-    `;
+    // Monaco 에디터로 텍스트 파일 편집
+    editorArea.innerHTML = '<div id="monaco-container" style="width: 100%; height: 100%;"></div>';
+
+    if (!monacoReady) {
+      // Monaco가 아직 로드되지 않았으면 잠시 후 다시 시도
+      setTimeout(() => renderActiveTabContent(), 100);
+      return;
+    }
+
+    // 파일 확장자에 따른 언어 설정
+    const language = getLanguageFromFileName(tab.fileName);
+
+    // Monaco 에디터 생성
+    monacoEditor = monaco.editor.create(document.getElementById('monaco-container'), {
+      value: tab.content,
+      language: language,
+      theme: 'custom-dark',
+      automaticLayout: true,
+      minimap: { enabled: false },
+      fontSize: 14,
+      lineNumbers: 'on',
+      scrollBeyondLastLine: false,
+      wordWrap: 'on',
+      tabSize: 2,
+      renderWhitespace: 'selection',
+      cursorBlinking: 'smooth',
+      smoothScrolling: true,
+    });
+
+    // 내용 변경 이벤트
+    monacoEditor.onDidChangeModelContent(() => {
+      tab.content = monacoEditor.getValue();
+      renderTabs(); // 탭 업데이트 (* 표시)
+    });
+
+    // Ctrl+S 키 바인딩 추가
+    monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      saveCurrentFile();
+    });
   }
+}
+
+// 파일명에서 언어 타입 추출
+function getLanguageFromFileName(fileName) {
+  const ext = fileName.split('.').pop().toLowerCase();
+  const languageMap = {
+    'js': 'javascript',
+    'ts': 'typescript',
+    'json': 'json',
+    'html': 'html',
+    'htm': 'html',
+    'css': 'css',
+    'scss': 'scss',
+    'less': 'less',
+    'md': 'markdown',
+    'py': 'python',
+    'java': 'java',
+    'c': 'c',
+    'cpp': 'cpp',
+    'h': 'c',
+    'hpp': 'cpp',
+    'cs': 'csharp',
+    'go': 'go',
+    'rs': 'rust',
+    'rb': 'ruby',
+    'php': 'php',
+    'sql': 'sql',
+    'xml': 'xml',
+    'yaml': 'yaml',
+    'yml': 'yaml',
+    'sh': 'shell',
+    'bash': 'shell',
+    'txt': 'plaintext',
+  };
+  return languageMap[ext] || 'plaintext';
 }
 
 // 환영 화면 표시
@@ -445,6 +613,52 @@ function setupActivityBar() {
         sidebarHeader.textContent = viewNames[view];
       }
     });
+  });
+}
+
+// 사이드바 리사이저 설정
+function setupSidebarResizer() {
+  const resizer = document.querySelector('.sidebar-resizer');
+  const sidebar = document.querySelector('.sidebar');
+
+  if (!resizer || !sidebar) return;
+
+  let isResizing = false;
+  let startX = 0;
+  let startWidth = 0;
+
+  const MIN_WIDTH = 200;
+  const MAX_WIDTH = 600;
+
+  resizer.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    startX = e.clientX;
+    startWidth = sidebar.offsetWidth;
+
+    resizer.classList.add('resizing');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+
+    const delta = e.clientX - startX;
+    let newWidth = startWidth + delta;
+
+    // 최소/최대 너비 제약
+    newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth));
+
+    sidebar.style.width = `${newWidth}px`;
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isResizing) {
+      isResizing = false;
+      resizer.classList.remove('resizing');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
   });
 }
 
@@ -502,6 +716,10 @@ let isPanning = false; // 캔버스 패닝 중
 let panStartX = 0;
 let panStartY = 0;
 
+// 색상 팔레트
+const pasteColors = ['#616161', '#FFB3BA', '#BAFFC9', '#BAE1FF', '#FFFFBA', '#E0BBE4', '#FFC9BA', '#D4A5A5', '#9EC1CF'];
+let colorPaletteVisible = false;
+
 // 캔버스 에디터 열기 (탭용)
 function openCanvasEditorForTab(tab) {
   currentFilePath = tab.filePath;
@@ -558,6 +776,9 @@ function openCanvasEditorForTab(tab) {
       btn.style.background = 'transparent';
     });
   });
+
+  // 색상 팔레트 초기화
+  initColorPalette();
 }
 
 // 월드 좌표를 화면 좌표로 변환 (뷰포트 offset 적용)
@@ -574,6 +795,117 @@ function screenToWorld(x, y) {
     x: x - viewportOffsetX,
     y: y - viewportOffsetY
   };
+}
+
+// 색상 팔레트 초기화
+function initColorPalette() {
+  const palette = document.getElementById('colorPalette');
+  if (!palette) return;
+
+  // 이미 초기화된 경우 중복 방지
+  if (palette.dataset.initialized === 'true') return;
+  palette.dataset.initialized = 'true';
+
+  palette.innerHTML = '';
+  pasteColors.forEach(color => {
+    const colorOption = document.createElement('div');
+    colorOption.className = 'color-option';
+    colorOption.style.backgroundColor = color;
+    colorOption.dataset.color = color;
+
+    colorOption.addEventListener('click', (e) => {
+      e.stopPropagation();
+      console.log('Color clicked:', color);
+      changeShapeColor(color);
+    });
+
+    palette.appendChild(colorOption);
+  });
+
+  // 팔레트 외부 클릭 시 숨기기
+  document.addEventListener('click', (e) => {
+    if (!palette.contains(e.target) && !e.target.closest('.canvas-shape')) {
+      hideColorPalette();
+    }
+  });
+}
+
+// 색상 팔레트 표시
+function showColorPalette() {
+  const palette = document.getElementById('colorPalette');
+  if (!palette) return;
+
+  // 고정된 색상 배열 사용
+  // 팔레트 다시 렌더링
+  palette.innerHTML = '';
+  pasteColors.forEach(color => {
+    const colorOption = document.createElement('div');
+    colorOption.className = 'color-option';
+    colorOption.style.backgroundColor = color;
+    colorOption.dataset.color = color;
+
+    colorOption.addEventListener('click', (e) => {
+      e.stopPropagation();
+      console.log('Color clicked:', color);
+      changeShapeColor(color);
+    });
+
+    palette.appendChild(colorOption);
+  });
+
+  palette.classList.add('show');
+  colorPaletteVisible = true;
+
+  // 현재 선택된 도형의 색상 표시
+  if (selectedShape !== null) {
+    const currentColor = canvasData.shapes[selectedShape].color;
+    palette.querySelectorAll('.color-option').forEach(option => {
+      if (option.dataset.color === currentColor) {
+        option.classList.add('selected');
+      } else {
+        option.classList.remove('selected');
+      }
+    });
+  }
+}
+
+// 색상 팔레트 숨기기
+function hideColorPalette() {
+  const palette = document.getElementById('colorPalette');
+  if (!palette) return;
+
+  palette.classList.remove('show');
+  colorPaletteVisible = false;
+}
+
+// 도형 색상 변경
+function changeShapeColor(color) {
+  console.log('changeShapeColor called:', color, 'selectedShape:', selectedShape, 'selectedShapes:', selectedShapes);
+
+  if (selectedShape !== null) {
+    console.log('Changing single shape color');
+    canvasData.shapes[selectedShape].color = color;
+    renderShapes();
+
+    // 탭을 수정됨으로 표시
+    if (activeTabIndex >= 0 && openTabs[activeTabIndex]) {
+      openTabs[activeTabIndex].content = JSON.stringify(canvasData, null, 2);
+    }
+  } else if (selectedShapes.length > 0) {
+    console.log('Changing multiple shapes color');
+    // 다중 선택된 도형들의 색상 변경
+    selectedShapes.forEach(index => {
+      canvasData.shapes[index].color = color;
+    });
+    renderShapes();
+
+    // 탭을 수정됨으로 표시
+    if (activeTabIndex >= 0 && openTabs[activeTabIndex]) {
+      openTabs[activeTabIndex].content = JSON.stringify(canvasData, null, 2);
+    }
+  } else {
+    console.log('No shape selected!');
+  }
 }
 
 // 도형 렌더링
@@ -778,7 +1110,7 @@ function renderShapes() {
       shapeEl.style.height = shape.height + 'px';
       shapeEl.style.cursor = 'move';
       shapeEl.style.border = '2px solid #3e3e42';
-      shapeEl.style.background = '#616161';
+      shapeEl.style.background = shape.color || '#616161';
 
       if (shape.type === 'circle') {
         shapeEl.style.borderRadius = '50%';
@@ -1057,9 +1389,7 @@ function setupCanvasEvents() {
   container.addEventListener('mousedown', handleCanvasMouseDown);
   document.addEventListener('mousemove', handleCanvasMouseMove);
   document.addEventListener('mouseup', handleCanvasMouseUp);
-
-  // 키보드 이벤트 추가
-  document.addEventListener('keydown', handleCanvasKeyDown);
+  // 키보드 이벤트는 initializeApp()에서 전역으로 등록됨
 }
 
 // 연결점 좌표 계산
@@ -1145,19 +1475,20 @@ function updateConnectedLines(rectangleIndex) {
 
 // 키보드 이벤트 핸들러
 function handleCanvasKeyDown(e) {
-  // 캔버스 에디터가 열려있지 않으면 무시
+  // Ctrl+S: 저장 (모든 파일 타입에서 동작)
+  if (e.ctrlKey && e.key === 's') {
+    e.preventDefault();
+    saveCurrentFile();
+    return;
+  }
+
+  // 캔버스 에디터가 열려있지 않으면 나머지 키 무시
   if (!document.getElementById('canvas-editor')) return;
 
   // Escape 키: 그리기 모드 해제
   if (e.key === 'Escape') {
     e.preventDefault();
     exitDrawingMode();
-  }
-
-  // Ctrl+S: 저장
-  if (e.ctrlKey && e.key === 's') {
-    e.preventDefault();
-    saveCanvas();
   }
 
   // Delete 키: 선택된 도형 삭제
@@ -1204,6 +1535,7 @@ function handleCanvasMouseDown(e) {
       selectedShape = null;
       selectedShapes = [];
       container.style.cursor = 'grabbing';
+      hideColorPalette();
     }
     renderShapes();
     return;
@@ -1240,6 +1572,14 @@ function handleCanvasMouseDown(e) {
     // 일반 클릭: 단일 선택
     selectedShape = index;
     selectedShapes = []; // 다중 선택 해제
+  }
+
+  // 사각형이 선택되면 색상 팔레트 표시
+  const shape = canvasData.shapes[index];
+  if (shape.type === 'rectangle' || shape.type === 'circle') {
+    showColorPalette();
+  } else {
+    hideColorPalette();
   }
 
   // 리사이즈 핸들 클릭 확인
@@ -1285,6 +1625,7 @@ function handleCanvasMouseDown(e) {
 
 function handleCanvasMouseMove(e) {
   const container = document.getElementById('canvas-container');
+  if (!container) return;
   const rect = container.getBoundingClientRect();
 
   // 캔버스 패닝 처리
@@ -1683,8 +2024,41 @@ async function saveCanvas() {
       if (activeTabIndex >= 0 && openTabs[activeTabIndex]) {
         openTabs[activeTabIndex].content = jsonContent;
         openTabs[activeTabIndex].originalContent = jsonContent;
+        renderTabs(); // * 표시 제거
       }
-      showToast('File saved successfully', 'success');
+    } else {
+      showToast('Failed to save file: ' + result.error, 'error');
+    }
+  } catch (error) {
+    showToast('Error saving file: ' + error, 'error');
+  }
+}
+
+// 현재 파일 저장 (타입에 따라 분기)
+async function saveCurrentFile() {
+  if (activeTabIndex < 0 || activeTabIndex >= openTabs.length) return;
+
+  const tab = openTabs[activeTabIndex];
+
+  if (tab.type === 'canvas') {
+    await saveCanvas();
+  } else {
+    await saveTextFile();
+  }
+}
+
+// 텍스트 파일 저장
+async function saveTextFile() {
+  if (activeTabIndex < 0 || activeTabIndex >= openTabs.length) return;
+
+  const tab = openTabs[activeTabIndex];
+
+  try {
+    const result = await window.electronAPI.fs.writeFile(tab.filePath, tab.content);
+    if (result.success) {
+      // 저장 성공 시 originalContent 업데이트
+      tab.originalContent = tab.content;
+      renderTabs(); // * 표시 제거
     } else {
       showToast('Failed to save file: ' + result.error, 'error');
     }
@@ -1707,8 +2081,8 @@ function hasUnsavedChanges(tabIndex) {
     return currentContent !== tab.originalContent;
   }
 
-  // 텍스트 파일의 경우 (현재는 구현 안됨, 나중에 추가 가능)
-  return false;
+  // 텍스트 파일의 경우
+  return tab.content !== tab.originalContent;
 }
 
 // 모달 표시
