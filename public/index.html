@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Code Editor</title>
+    <title>Virtual Validation Tools</title>
     <link rel="stylesheet" href="codicon.css">
     <style>
         * {
@@ -46,6 +46,12 @@
             margin-left: 8px;
         }
 
+        .titlebar-icon {
+            width: 18px;
+            height: 18px;
+            object-fit: contain;
+        }
+
         .titlebar-menu {
             display: flex;
             -webkit-app-region: no-drag;
@@ -61,6 +67,39 @@
 
         .titlebar-menu-item:hover {
             background: #3e3e42;
+        }
+
+        /* 드롭다운 메뉴 */
+        .menu-with-dropdown {
+            position: relative;
+        }
+
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: #252526;
+            border: 1px solid #454545;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            min-width: 150px;
+            z-index: 1000;
+        }
+
+        .dropdown-menu.show {
+            display: block;
+        }
+
+        .dropdown-item {
+            padding: 8px 16px;
+            font-size: 12px;
+            color: #cccccc;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .dropdown-item:hover {
+            background: #094771;
         }
 
         .titlebar-controls {
@@ -99,6 +138,8 @@
             display: flex;
             flex: 1;
             width: 100vw;
+            min-height: 0;
+            overflow: hidden;
         }
 
         /* 왼쪽 아이콘 메뉴바 */
@@ -156,11 +197,13 @@
         /* 사이드바 (Explorer) */
         .sidebar {
             width: 250px;
+            height: 100%;
             background: #252526;
             display: flex;
             flex-direction: column;
             border-right: 1px solid #2d2d2d;
             flex-shrink: 0;
+            overflow: hidden;
         }
 
         /* 사이드바 리사이저 */
@@ -196,6 +239,30 @@
             flex: 1;
             overflow-y: auto;
             padding: 10px 0;
+            min-height: 0;
+        }
+
+        /* 탐색창 스크롤바 (평소 숨김, 호버 시 표시) */
+        .sidebar-content::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .sidebar-content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .sidebar-content::-webkit-scrollbar-thumb {
+            background: transparent;
+            border-radius: 4px;
+            transition: background 0.3s;
+        }
+
+        .sidebar-content:hover::-webkit-scrollbar-thumb {
+            background: #424242;
+        }
+
+        .sidebar-content:hover::-webkit-scrollbar-thumb:hover {
+            background: #555555;
         }
 
         /* 파일 트리 */
@@ -229,6 +296,10 @@
         }
 
         .tree-item.folder {
+            font-weight: normal;
+        }
+
+        .tree-item.folder.root {
             font-weight: 500;
         }
 
@@ -254,6 +325,8 @@
             background: #2d2d2d;
             border-bottom: 1px solid #2d2d2d;
             min-height: 35px;
+            overflow-x: auto;
+            overflow-y: hidden;
         }
 
         .editor-tab {
@@ -266,6 +339,8 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
 
         .editor-tab.active {
@@ -327,11 +402,35 @@
             background: #4e4e4e;
         }
 
+        /* 탭 영역 스크롤바 (평소 숨김, 호버 시 표시) */
+        .editor-tabs::-webkit-scrollbar {
+            height: 3px;
+        }
+
+        .editor-tabs::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .editor-tabs::-webkit-scrollbar-thumb {
+            background: transparent;
+            border-radius: 2px;
+            transition: background 0.3s;
+        }
+
+        .editor-tabs:hover::-webkit-scrollbar-thumb {
+            background: #555555;
+        }
+
+        .editor-tabs:hover::-webkit-scrollbar-thumb:hover {
+            background: #666666;
+        }
+
         .chevron {
             display: inline-block;
             margin-right: 8px;
             transition: transform 0.2s;
             font-family: 'Microsoft Sans Serif', sans-serif;
+            font-weight: normal;
         }
 
         .chevron.expanded {
@@ -553,18 +652,305 @@
             border-color: #ffffff;
             box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
         }
+
+        /* 하단 패널 (OUTPUT, TERMINAL 등) */
+        .bottom-panel {
+            display: none;
+            flex-direction: column;
+            background: #1e1e1e;
+            min-height: 150px;
+            max-height: 50vh;
+        }
+
+        .bottom-panel.show {
+            display: flex;
+        }
+
+        .bottom-panel-resizer {
+            height: 3px;
+            background: #3c3c3c;
+            cursor: row-resize;
+            flex-shrink: 0;
+            transition: background 0.2s;
+        }
+
+        .bottom-panel-resizer:hover {
+            background: #007acc;
+        }
+
+        .bottom-panel-resizer.resizing {
+            background: #007acc;
+        }
+
+        .bottom-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #1e1e1e;
+            padding: 0 10px;
+            height: 26px;
+            flex-shrink: 0;
+        }
+
+        .bottom-panel-tabs {
+            display: flex;
+            height: 100%;
+            border-bottom: 1px solid #3c3c3c;
+            margin-bottom: 4px;
+        }
+
+        .bottom-panel-tab {
+            padding: 0 10px;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #858585;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            transition: color 0.2s;
+        }
+
+        .bottom-panel-tab:hover {
+            color: #cccccc;
+        }
+
+        .bottom-panel-tab.active {
+            color: #e7e7e7;
+            border-bottom-color: #007acc;
+        }
+
+        .bottom-panel-actions {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .bottom-panel-action {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: #858585;
+            border-radius: 3px;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .bottom-panel-action:hover {
+            color: #ffffff;
+            background: #3e3e42;
+        }
+
+        .bottom-panel-action .codicon {
+            font-size: 14px;
+        }
+
+        .bottom-panel-content {
+            flex: 1;
+            overflow: auto;
+            padding: 6px 10px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #cccccc;
+            background: #1e1e1e;
+        }
+
+        .output-line {
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .output-line.info {
+            color: #75beff;
+        }
+
+        .output-line.success {
+            color: #89d185;
+        }
+
+        .output-line.error {
+            color: #f48771;
+        }
+
+        .output-line.warning {
+            color: #cca700;
+        }
+
+        /* 터미널 스타일 */
+        .terminal-container {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .terminal-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .terminal-content {
+            flex: 1;
+            overflow: auto;
+            padding: 6px 10px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #cccccc;
+            background: #1e1e1e;
+            cursor: text;
+        }
+
+        .terminal-hidden-input {
+            position: absolute;
+            left: -9999px;
+            opacity: 0;
+        }
+
+        .terminal-cursor {
+            display: inline-block;
+            width: 7px;
+            height: 14px;
+            background: #cccccc;
+            animation: blink 1s step-end infinite;
+            vertical-align: text-bottom;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+
+        .terminal-output-line {
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .terminal-output-line.command {
+            color: #dcdcaa;
+        }
+
+        .terminal-output-line.error {
+            color: #f48771;
+        }
+
+        /* 터미널 인스턴스 사이드바 */
+        .terminal-sidebar {
+            width: 140px;
+            background: #252526;
+            border-left: 1px solid #3c3c3c;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .terminal-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 0;
+        }
+
+        .terminal-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #cccccc;
+            gap: 6px;
+        }
+
+        .terminal-item:hover {
+            background: #2a2d2e;
+        }
+
+        .terminal-item.active {
+            background: #37373d;
+        }
+
+        .terminal-item-icon {
+            font-size: 14px;
+            color: #858585;
+        }
+
+        .terminal-item-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .terminal-item-close {
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #858585;
+            font-size: 14px;
+            border-radius: 3px;
+            opacity: 0;
+        }
+
+        .terminal-item:hover .terminal-item-close {
+            opacity: 1;
+        }
+
+        .terminal-item-close:hover {
+            color: #ffffff;
+            background: #3e3e42;
+        }
+
+        /* 에디터 + 패널 컨테이너 */
+        .editor-panel-container {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .editor-wrapper {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+        }
     </style>
 </head>
 <body>
     <!-- 커스텀 타이틀바 -->
     <div class="titlebar">
         <div class="titlebar-left">
-            <div class="titlebar-title">Code Editor</div>
+            <img src="vvu-icon2.png" class="titlebar-icon" alt="icon">
             <div class="titlebar-menu">
                 <div class="titlebar-menu-item">File</div>
                 <div class="titlebar-menu-item">Edit</div>
                 <div class="titlebar-menu-item">Selection</div>
-                <div class="titlebar-menu-item" onclick="toggleDevTools()">View</div>
+                <div class="titlebar-menu-item menu-with-dropdown" id="projectMenu" onclick="toggleProjectMenu(event)">
+                    Project
+                    <div class="dropdown-menu" id="projectDropdown">
+                        <div class="dropdown-item" onclick="openTestcaseSync(event)">Testcase Sync</div>
+                    </div>
+                </div>
+                <div class="titlebar-menu-item menu-with-dropdown" id="viewMenu" onclick="toggleViewMenu(event)">
+                    View
+                    <div class="dropdown-menu" id="viewDropdown">
+                        <div class="dropdown-item" onclick="toggleOutputPanel(event)">
+                            <span id="outputCheckmark" style="display: inline-block; width: 16px;">✓</span>
+                            Output
+                        </div>
+                        <div class="dropdown-item" onclick="toggleDevToolsFromMenu(event)">
+                            <span style="display: inline-block; width: 16px;"></span>
+                            Developer Tools
+                        </div>
+                    </div>
+                </div>
                 <div class="titlebar-menu-item">Go</div>
                 <div class="titlebar-menu-item">Run</div>
                 <div class="titlebar-menu-item">Terminal</div>
@@ -587,7 +973,7 @@
     <div class="app-container">
         <!-- 왼쪽 아이콘 메뉴바 -->
         <div class="activity-bar">
-            <div class="activity-bar-item active" data-view="explorer" title="Explorer">
+            <div class="activity-bar-item" data-view="explorer" title="Explorer">
                 <i class="codicon codicon-files"></i>
             </div>
             <div class="activity-bar-item" data-view="search" title="Search">
@@ -601,79 +987,78 @@
             </div>
         </div>
 
-        <!-- 사이드바 (Explorer) -->
-        <div class="sidebar">
+        <!-- 사이드바 (Explorer) - 초기에는 숨김 -->
+        <div class="sidebar" style="display: none;">
             <div class="sidebar-header">
                 Explorer
             </div>
             <div class="sidebar-content" id="explorer">
-                <div class="tree-item folder" data-type="folder" data-name="project-root">
-                    <span class="chevron">▶</span>
-                    <span class="tree-item-icon">📁</span>
-                    <span class="tree-item-label">MY PROJECT</span>
-                </div>
-                <div class="tree-item-children" id="project-root-children">
-                    <div class="tree-item folder" data-type="folder" data-name="src">
-                        <span class="chevron">▶</span>
-                        <span class="tree-item-icon">📁</span>
-                        <span class="tree-item-label">src</span>
-                    </div>
-                    <div class="tree-item-children" id="src-children">
-                        <div class="tree-item file" data-file="src/main.ts">
-                            <span class="tree-item-icon">📄</span>
-                            <span class="tree-item-label">main.ts</span>
-                        </div>
-                        <div class="tree-item file" data-file="src/preload.ts">
-                            <span class="tree-item-icon">📄</span>
-                            <span class="tree-item-label">preload.ts</span>
-                        </div>
-                    </div>
-                    <div class="tree-item folder" data-type="folder" data-name="public">
-                        <span class="chevron">▶</span>
-                        <span class="tree-item-icon">📁</span>
-                        <span class="tree-item-label">public</span>
-                    </div>
-                    <div class="tree-item-children" id="public-children">
-                        <div class="tree-item file" data-file="public/index.html">
-                            <span class="tree-item-icon">📄</span>
-                            <span class="tree-item-label">index.html</span>
-                        </div>
-                        <div class="tree-item file" data-file="public/renderer.js">
-                            <span class="tree-item-icon">📄</span>
-                            <span class="tree-item-label">renderer.js</span>
-                        </div>
-                    </div>
-                    <div class="tree-item file" data-file="package.json">
-                        <span class="tree-item-icon">📦</span>
-                        <span class="tree-item-label">package.json</span>
-                    </div>
-                    <div class="tree-item file" data-file="tsconfig.json">
-                        <span class="tree-item-icon">⚙️</span>
-                        <span class="tree-item-label">tsconfig.json</span>
-                    </div>
-                    <div class="tree-item file" data-file="README.md">
-                        <span class="tree-item-icon">📝</span>
-                        <span class="tree-item-label">README.md</span>
-                    </div>
-                </div>
+                <!-- 폴더가 열리면 여기에 파일 트리가 표시됨 -->
             </div>
         </div>
 
-        <!-- 리사이저 -->
-        <div class="sidebar-resizer"></div>
+        <!-- 리사이저 - 초기에는 숨김 -->
+        <div class="sidebar-resizer" style="display: none;"></div>
 
         <!-- 메인 에디터 영역 -->
         <div class="main-content">
-            <div class="editor-tabs" id="editorTabs">
-                <div class="editor-tab active">
-                    <span>Welcome</span>
+            <div class="editor-panel-container">
+                <!-- 에디터 래퍼 -->
+                <div class="editor-wrapper">
+                    <div class="editor-tabs" id="editorTabs">
+                        <div class="editor-tab active">
+                            <img src="vvu-icon2.png" style="width: 16px; height: 16px; margin-right: 6px; vertical-align: middle;">
+                            <span style="vertical-align: middle;">Welcome</span>
+                        </div>
+                    </div>
+                    <div class="editor-area">
+                        <div class="welcome-screen" style="align-items: flex-start; justify-content: flex-start; padding: 40px 60px; font-family: 'Segoe UI', sans-serif;">
+                            <h1 style="font-size: 36px; font-weight: 600; margin-bottom: 40px;">Virtual Validation Tools</h1>
+                            <div style="text-align: left;">
+                                <h2 style="font-size: 16px; font-weight: 600; color: #858585; text-transform: uppercase; margin-bottom: 12px;">Start</h2>
+                                <div class="welcome-link" onclick="openFolder()" style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 0; color: #3794ff; transition: color 0.2s; font-size: 14px;">
+                                    <i class="codicon codicon-folder-opened" style="font-size: 16px;"></i>
+                                    <span>Open Folder...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div class="editor-area">
-                <div class="welcome-screen">
-                    <h1>Code Editor</h1>
-                    <p>Electron + TypeScript 기반 에디터</p>
-                    <p>왼쪽 Explorer에서 파일을 선택하세요</p>
+
+                <!-- 하단 패널 (OUTPUT / TERMINAL) -->
+                <div class="bottom-panel show" id="bottomPanel" style="height: 200px;">
+                    <div class="bottom-panel-resizer" id="bottomPanelResizer"></div>
+                    <div class="bottom-panel-header">
+                        <div class="bottom-panel-tabs">
+                            <div class="bottom-panel-tab active" data-panel="output" onclick="switchBottomTab('output')">Output</div>
+                            <div class="bottom-panel-tab" data-panel="terminal" onclick="switchBottomTab('terminal')">Terminal</div>
+                        </div>
+                        <div class="bottom-panel-actions" id="bottomPanelActions">
+                            <div class="bottom-panel-action" onclick="clearOutput()" title="Clear Output">
+                                <i class="codicon codicon-clear-all"></i>
+                            </div>
+                            <div class="bottom-panel-action" onclick="toggleOutputPanel()" title="Close Panel">
+                                <i class="codicon codicon-close"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- OUTPUT 내용 -->
+                    <div class="bottom-panel-content" id="outputContent">
+                        <div class="output-line info">[INFO] Output panel ready.</div>
+                    </div>
+                    <!-- TERMINAL 내용 -->
+                    <div class="terminal-container" id="terminalContainer" style="display: none;">
+                        <div class="terminal-main">
+                            <div class="terminal-content" id="terminalContent" onclick="focusTerminalInput()">
+                            </div>
+                        </div>
+                        <div class="terminal-sidebar">
+                            <div class="terminal-list" id="terminalList">
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 숨겨진 터미널 입력 -->
+                    <input type="text" id="terminalInput" class="terminal-hidden-input" autocomplete="off">
                 </div>
             </div>
         </div>

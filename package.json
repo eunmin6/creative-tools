@@ -1,27 +1,57 @@
 {
-  "name": "electron-typescript-app",
+  "name": "creative-tools",
   "version": "1.0.0",
-  "description": "Electron application with TypeScript",
+  "description": "Creative Tools - VSCode-style desktop app with canvas editor",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
     "start": "npm run build && electron .",
-    "dev": "tsc && electron ."
+    "dev": "tsc && electron .",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux"
   },
   "keywords": [
     "electron",
-    "typescript"
+    "typescript",
+    "canvas",
+    "editor"
   ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^20.10.0",
     "electron": "^28.0.0",
+    "electron-builder": "^26.0.12",
     "typescript": "^5.3.0"
   },
   "dependencies": {
     "@vscode/codicons": "^0.0.44",
     "monaco-editor": "^0.55.1"
+  },
+  "build": {
+    "appId": "com.creative-tools.app",
+    "productName": "Virtual Validation Tools",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "public/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "public/icon/code_150x150.png",
+      "signAndEditExecutable": false
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }

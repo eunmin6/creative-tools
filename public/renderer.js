@@ -16,7 +16,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function initializeApp() {
-  loadProjectFiles();
+  // 초기에는 폴더를 로드하지 않음 - Open Folder로만 폴더 로드
   setupTreeInteraction();
   setupActivityBar();
   setupSidebarResizer();
@@ -50,27 +50,35 @@ function setupGlobalKeyboardEvents() {
   document.addEventListener('keydown', handleCanvasKeyDown);
 }
 
+// 현재 프로젝트 경로
+let currentProjectPath = null;
+
 // 프로젝트 파일 로드
-async function loadProjectFiles() {
+async function loadProjectFiles(customPath = null) {
   if (!window.electronAPI || !window.electronAPI.fs) {
     console.error('File system API not available');
     return;
   }
 
-  const projectRoot = await window.electronAPI.getProjectRoot();
+  const projectRoot = customPath || await window.electronAPI.getProjectRoot();
+  currentProjectPath = projectRoot;
+
+  // 폴더 이름 추출
+  const folderName = window.electronAPI.fs.path.basename(projectRoot).toUpperCase();
+
   const explorerContent = document.getElementById('explorer');
 
   // Explorer 내용을 실제 파일 구조로 대체
   explorerContent.innerHTML = '';
 
-  // 프로젝트 루트 폴더 생성
-  const rootFolder = createFolderElement('PROJECT', projectRoot, true);
+  // 프로젝트 루트 폴더 생성 (폴더 이름 사용)
+  const rootFolder = createFolderElement(folderName, projectRoot, true);
   explorerContent.appendChild(rootFolder);
 
-  // 하위 항목 컨테이너
+  // 하위 항목 컨테이너 (폴더 이름 기반 ID)
   const rootChildren = document.createElement('div');
   rootChildren.className = 'tree-item-children expanded';
-  rootChildren.id = 'project-children';
+  rootChildren.id = `${folderName.replace(/\s+/g, '-').toLowerCase()}-children`;
 
   // 프로젝트 디렉토리 읽기
   const items = await window.electronAPI.fs.readdir(projectRoot);
@@ -107,7 +115,7 @@ async function loadProjectFiles() {
 // 폴더 요소 생성
 function createFolderElement(name, fullPath, isRoot = false, depth = 0) {
   const folder = document.createElement('div');
-  folder.className = 'tree-item folder';
+  folder.className = isRoot ? 'tree-item folder root' : 'tree-item folder';
   folder.dataset.type = 'folder';
   folder.dataset.name = name.replace(/\s+/g, '-').toLowerCase();
   folder.dataset.path = fullPath;
@@ -160,6 +168,11 @@ function createFileElement(name, fullPath, depth = 0) {
 
 // 파일 아이콘 가져오기
 function getFileIcon(filename) {
+  // 특수 탭 아이콘
+  if (filename === 'Testcase Sync' || filename === 'Welcome') {
+    return 'vvu-icon2.png';
+  }
+
   const ext = filename.split('.').pop().toLowerCase();
   const iconMap = {
     'js': 'javascript',
@@ -374,15 +387,53 @@ function renderTabs() {
   const editorTabs = document.getElementById('editorTabs');
   editorTabs.innerHTML = '';
 
+  // 열린 탭이 없으면 Welcome 탭 표시
+  if (openTabs.length === 0) {
+    const welcomeTab = document.createElement('div');
+    welcomeTab.className = 'editor-tab active';
+
+    const tabIcon = document.createElement('img');
+    tabIcon.src = 'vvu-icon2.png';
+    tabIcon.style.width = '16px';
+    tabIcon.style.height = '16px';
+    tabIcon.style.marginRight = '6px';
+    tabIcon.style.verticalAlign = 'middle';
+
+    const tabLabel = document.createElement('span');
+    tabLabel.textContent = 'Welcome';
+    tabLabel.style.verticalAlign = 'middle';
+
+    welcomeTab.appendChild(tabIcon);
+    welcomeTab.appendChild(tabLabel);
+    editorTabs.appendChild(welcomeTab);
+    return;
+  }
+
   openTabs.forEach((tab, index) => {
     const tabEl = document.createElement('div');
     tabEl.className = 'editor-tab' + (index === activeTabIndex ? ' active' : '');
 
+    // 파일 아이콘 추가
+    const tabIcon = document.createElement('img');
+    tabIcon.src = getFileIcon(tab.fileName);
+    tabIcon.style.width = '16px';
+    tabIcon.style.height = '16px';
+    tabIcon.style.marginRight = '6px';
+    tabIcon.style.verticalAlign = 'middle';
+    tabIcon.style.flexShrink = '0';
+
+    // 파일 이름 (긴 파일명은 앞에 ... 추가)
     const tabLabel = document.createElement('span');
-    // 수정된 파일이면 * 표시
     const isModified = hasUnsavedChanges(index);
-    tabLabel.textContent = tab.fileName + (isModified ? ' *' : '');
+    const maxLength = 20;
+    let displayName = tab.fileName;
+    if (displayName.length > maxLength) {
+      displayName = '...' + displayName.slice(-(maxLength - 3));
+    }
+    tabLabel.textContent = displayName + (isModified ? ' *' : '');
     tabLabel.style.cursor = 'pointer';
+    tabLabel.style.verticalAlign = 'middle';
+    tabLabel.title = tab.fileName; // 전체 파일명 툴팁
     tabLabel.addEventListener('click', () => switchToTab(index));
 
     const closeBtn = document.createElement('span');
@@ -392,6 +443,7 @@ function renderTabs() {
     closeBtn.style.fontSize = '18px';
     closeBtn.style.color = '#858585';
     closeBtn.style.transition = 'color 0.2s';
+    closeBtn.style.verticalAlign = 'middle';
     closeBtn.addEventListener('mouseenter', () => {
       closeBtn.style.color = '#ffffff';
     });
@@ -403,9 +455,17 @@ function renderTabs() {
       closeTab(index);
     });
 
+    tabEl.appendChild(tabIcon);
     tabEl.appendChild(tabLabel);
     tabEl.appendChild(closeBtn);
     editorTabs.appendChild(tabEl);
+
+    // 활성 탭이면 보이도록 스크롤
+    if (index === activeTabIndex) {
+      setTimeout(() => {
+        tabEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      }, 0);
+    }
   });
 }
 
@@ -489,6 +549,8 @@ function renderActiveTabContent() {
 
   if (tab.type === 'canvas') {
     openCanvasEditorForTab(tab);
+  } else if (tab.type === 'testcase-sync') {
+    renderTestcaseSync();
   } else {
     // Monaco 에디터로 텍스트 파일 편집
     editorArea.innerHTML = '<div id="monaco-container" style="width: 100%; height: 100%;"></div>';
@@ -571,12 +633,186 @@ function getLanguageFromFileName(fileName) {
 function showWelcomeScreen() {
   const editorArea = document.querySelector('.editor-area');
   editorArea.innerHTML = `
-    <div class="welcome-screen">
-      <h1>Code Editor</h1>
-      <p>Electron + TypeScript 기반 에디터</p>
-      <p>왼쪽 Explorer에서 파일을 선택하세요</p>
+    <div class="welcome-screen" style="align-items: flex-start; justify-content: flex-start; padding: 40px 60px; font-family: 'Segoe UI', sans-serif;">
+      <h1 style="font-size: 36px; font-weight: 600; margin-bottom: 40px;">Virtual Validation Tools</h1>
+      <div style="text-align: left;">
+        <h2 style="font-size: 16px; font-weight: 600; color: #858585; text-transform: uppercase; margin-bottom: 12px;">Start</h2>
+        <div class="welcome-link" onclick="openFolder()" style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 0; color: #3794ff; transition: color 0.2s; font-size: 14px;">
+          <i class="codicon codicon-folder-opened" style="font-size: 16px;"></i>
+          <span>Open Folder...</span>
+        </div>
+      </div>
     </div>
   `;
+
+  // 호버 효과 추가
+  const welcomeLink = editorArea.querySelector('.welcome-link');
+  if (welcomeLink) {
+    welcomeLink.addEventListener('mouseenter', () => {
+      welcomeLink.style.color = '#4da6ff';
+    });
+    welcomeLink.addEventListener('mouseleave', () => {
+      welcomeLink.style.color = '#3794ff';
+    });
+  }
+}
+
+// 폴더 열기
+async function openFolder() {
+  if (!window.electronAPI || !window.electronAPI.dialog) {
+    console.error('Dialog API not available');
+    return;
+  }
+
+  const folderPath = await window.electronAPI.dialog.openFolder();
+  if (folderPath) {
+    await loadProjectFiles(folderPath);
+
+    // 폴더 열림 상태로 설정
+    folderOpened = true;
+
+    // 사이드바 표시
+    const sidebar = document.querySelector('.sidebar');
+    const resizer = document.querySelector('.sidebar-resizer');
+    sidebar.style.display = 'flex';
+    resizer.style.display = 'block';
+    sidebarVisible = true;
+
+    // Explorer 아이콘 활성화
+    const explorerItem = document.querySelector('.activity-bar-item[data-view="explorer"]');
+    if (explorerItem) {
+      document.querySelectorAll('.activity-bar-item').forEach(i => i.classList.remove('active'));
+      explorerItem.classList.add('active');
+      currentActiveView = 'explorer';
+    }
+  }
+}
+
+// Project 메뉴 토글
+function toggleProjectMenu(event) {
+  event.stopPropagation();
+  const dropdown = document.getElementById('projectDropdown');
+  dropdown.classList.toggle('show');
+
+  // 다른 곳 클릭하면 닫기
+  const closeDropdown = (e) => {
+    if (!e.target.closest('#projectMenu')) {
+      dropdown.classList.remove('show');
+      document.removeEventListener('click', closeDropdown);
+    }
+  };
+
+  if (dropdown.classList.contains('show')) {
+    setTimeout(() => document.addEventListener('click', closeDropdown), 0);
+  }
+}
+
+// Testcase Sync 열기
+function openTestcaseSync(event) {
+  if (event) event.stopPropagation();
+
+  // 드롭다운 닫기
+  const dropdown = document.getElementById('projectDropdown');
+  if (dropdown) dropdown.classList.remove('show');
+
+  // 이미 열려있는지 확인
+  const existingTabIndex = openTabs.findIndex(tab => tab.filePath === '__testcase_sync__');
+  if (existingTabIndex !== -1) {
+    switchToTab(existingTabIndex);
+    return;
+  }
+
+  // 새 탭 추가
+  openTabs.push({
+    filePath: '__testcase_sync__',
+    fileName: 'Testcase Sync',
+    type: 'testcase-sync',
+    content: null,
+    originalContent: null
+  });
+
+  activeTabIndex = openTabs.length - 1;
+  renderTabs();
+  renderTestcaseSync();
+}
+
+// Testcase Sync 화면 렌더링
+function renderTestcaseSync() {
+  const editorArea = document.querySelector('.editor-area');
+  editorArea.innerHTML = `
+    <div class="testcase-sync" style="padding: 40px 60px; font-family: 'Segoe UI', sans-serif;">
+      <h1 style="font-size: 28px; font-weight: 600; margin-bottom: 16px; color: #cccccc;">Testcase Sync</h1>
+      <p style="font-size: 14px; color: #858585; margin-bottom: 40px;">Load your testcases to get started.</p>
+
+      <div style="display: flex; flex-direction: column; gap: 16px; max-width: 400px;">
+        <div class="wizard-option" onclick="loadFromCodebeamer()" style="display: flex; align-items: center; gap: 16px; padding: 16px 20px; background: #2d2d2d; border: 1px solid #454545; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
+          <div style="width: 40px; height: 40px; background: #0e639c; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+            <i class="codicon codicon-cloud-download" style="font-size: 20px; color: white;"></i>
+          </div>
+          <div>
+            <div style="font-size: 14px; font-weight: 500; color: #cccccc; margin-bottom: 4px;">Load from Codebeamer</div>
+            <div style="font-size: 12px; color: #858585;">Connect to Codebeamer and import testcases</div>
+          </div>
+        </div>
+
+        <div class="wizard-option" onclick="importFromExcel()" style="display: flex; align-items: center; gap: 16px; padding: 16px 20px; background: #2d2d2d; border: 1px solid #454545; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
+          <div style="width: 40px; height: 40px; background: #217346; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+            <i class="codicon codicon-file" style="font-size: 20px; color: white;"></i>
+          </div>
+          <div>
+            <div style="font-size: 14px; font-weight: 500; color: #cccccc; margin-bottom: 4px;">Import from Excel</div>
+            <div style="font-size: 12px; color: #858585;">Import testcases from an Excel file (.xlsx)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // 호버 효과 추가
+  const wizardOptions = editorArea.querySelectorAll('.wizard-option');
+  wizardOptions.forEach(option => {
+    option.addEventListener('mouseenter', () => {
+      option.style.borderColor = '#007acc';
+      option.style.background = '#37373d';
+    });
+    option.addEventListener('mouseleave', () => {
+      option.style.borderColor = '#454545';
+      option.style.background = '#2d2d2d';
+    });
+  });
+}
+
+// Codebeamer에서 불러오기 (UI만)
+function loadFromCodebeamer() {
+  showToast('info', 'Codebeamer connection feature coming soon.');
+}
+
+// Excel에서 가져오기
+async function importFromExcel() {
+  try {
+    const filePath = await window.electronAPI.dialog.openFile({
+      filters: [
+        { name: 'Excel Files', extensions: ['xlsx', 'xls'] }
+      ]
+    });
+
+    if (filePath) {
+      const fileName = filePath.split(/[\\/]/).pop();
+      showToast('info', `Processing: ${fileName}`);
+
+      // Output 패널이 닫혀있으면 열기
+      if (!outputPanelVisible) {
+        toggleOutputPanel();
+      }
+
+      // Python 스크립트 실행
+      appendOutput(`Selected Excel file: ${filePath}`, 'info');
+      await runPythonScript('scripts/excel_handler.py', [filePath]);
+    }
+  } catch (error) {
+    showToast('error', 'Failed to open file dialog.');
+    console.error('Error opening file dialog:', error);
+  }
 }
 
 // HTML 이스케이프
@@ -586,19 +822,53 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// 사이드바 표시 상태
+let sidebarVisible = false;
+let currentActiveView = null;
+let folderOpened = false; // 폴더가 열렸는지 여부
+
 // Activity Bar 상호작용 설정
 function setupActivityBar() {
   const activityBarItems = document.querySelectorAll('.activity-bar-item');
+  const sidebar = document.querySelector('.sidebar');
+  const resizer = document.querySelector('.sidebar-resizer');
 
   activityBarItems.forEach(item => {
     item.addEventListener('click', () => {
+      const view = item.dataset.view;
+
+      // 폴더가 열리지 않은 상태에서는 사이드바를 열지 않음
+      if (!folderOpened) {
+        return;
+      }
+
+      // 같은 아이콘을 다시 클릭하면 사이드바 토글
+      if (view === currentActiveView && item.classList.contains('active')) {
+        sidebarVisible = !sidebarVisible;
+
+        if (sidebarVisible) {
+          sidebar.style.display = 'flex';
+          resizer.style.display = 'block';
+        } else {
+          sidebar.style.display = 'none';
+          resizer.style.display = 'none';
+        }
+        return;
+      }
+
+      // 다른 아이콘 클릭 시 사이드바 표시
+      if (!sidebarVisible) {
+        sidebarVisible = true;
+        sidebar.style.display = 'flex';
+        resizer.style.display = 'block';
+      }
+
       // 모든 항목에서 active 클래스 제거
       activityBarItems.forEach(i => i.classList.remove('active'));
 
       // 클릭한 항목에 active 클래스 추가
       item.classList.add('active');
-
-      const view = item.dataset.view;
+      currentActiveView = view;
 
       // 사이드바 헤더 텍스트 업데이트
       const sidebarHeader = document.querySelector('.sidebar-header');
@@ -2197,4 +2467,438 @@ function removeToast(toast) {
       toast.parentNode.removeChild(toast);
     }
   }, 300); // 애니메이션 시간과 맞춤
+}
+
+// ===== OUTPUT 패널 관련 함수 =====
+
+let outputPanelVisible = true;
+
+// View 메뉴 토글
+function toggleViewMenu(event) {
+  event.stopPropagation();
+  const dropdown = document.getElementById('viewDropdown');
+  dropdown.classList.toggle('show');
+
+  // 다른 곳 클릭하면 닫기
+  const closeDropdown = (e) => {
+    if (!e.target.closest('#viewMenu')) {
+      dropdown.classList.remove('show');
+      document.removeEventListener('click', closeDropdown);
+    }
+  };
+
+  if (dropdown.classList.contains('show')) {
+    setTimeout(() => document.addEventListener('click', closeDropdown), 0);
+  }
+}
+
+// Output 패널 토글
+function toggleOutputPanel(event) {
+  if (event) event.stopPropagation();
+
+  // 드롭다운 닫기
+  const dropdown = document.getElementById('viewDropdown');
+  if (dropdown) dropdown.classList.remove('show');
+
+  const panel = document.getElementById('bottomPanel');
+  const checkmark = document.getElementById('outputCheckmark');
+
+  outputPanelVisible = !outputPanelVisible;
+
+  if (outputPanelVisible) {
+    panel.classList.add('show');
+    if (checkmark) checkmark.textContent = '✓';
+  } else {
+    panel.classList.remove('show');
+    if (checkmark) checkmark.textContent = '';
+  }
+}
+
+// Developer Tools 토글 (메뉴에서)
+function toggleDevToolsFromMenu(event) {
+  if (event) event.stopPropagation();
+
+  // 드롭다운 닫기
+  const dropdown = document.getElementById('viewDropdown');
+  if (dropdown) dropdown.classList.remove('show');
+
+  toggleDevTools();
+}
+
+// Output 내용 추가
+function appendOutput(message, type = 'info') {
+  const outputContent = document.getElementById('outputContent');
+  if (!outputContent) return;
+
+  const line = document.createElement('div');
+  line.className = `output-line ${type}`;
+
+  const timestamp = new Date().toLocaleTimeString();
+  const prefix = type === 'error' ? '[ERROR]' :
+                 type === 'success' ? '[SUCCESS]' :
+                 type === 'warning' ? '[WARNING]' : '[INFO]';
+
+  line.textContent = `${timestamp} ${prefix} ${message}`;
+  outputContent.appendChild(line);
+
+  // 스크롤을 맨 아래로
+  outputContent.scrollTop = outputContent.scrollHeight;
+}
+
+// Output 클리어
+function clearOutput() {
+  const outputContent = document.getElementById('outputContent');
+  if (outputContent) {
+    outputContent.innerHTML = '<div class="output-line info">[INFO] Output cleared.</div>';
+  }
+}
+
+// 하단 패널 리사이저 설정
+function setupBottomPanelResizer() {
+  const resizer = document.getElementById('bottomPanelResizer');
+  const panel = document.getElementById('bottomPanel');
+  if (!resizer || !panel) return;
+
+  let isResizing = false;
+  let startY = 0;
+  let startHeight = 0;
+
+  resizer.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    startY = e.clientY;
+    startHeight = panel.offsetHeight;
+    resizer.classList.add('resizing');
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+
+    const delta = startY - e.clientY;
+    const newHeight = Math.max(100, Math.min(window.innerHeight * 0.7, startHeight + delta));
+    panel.style.height = newHeight + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isResizing) {
+      isResizing = false;
+      resizer.classList.remove('resizing');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  });
+}
+
+// Python 스크립트 실행
+async function runPythonScript(scriptPath, args = []) {
+  appendOutput(`Running Python script: ${scriptPath}`, 'info');
+
+  try {
+    const result = await window.electronAPI.python.run(scriptPath, args);
+
+    if (result.stdout) {
+      result.stdout.split('\n').forEach(line => {
+        if (line.trim()) appendOutput(line, 'success');
+      });
+    }
+
+    if (result.stderr) {
+      result.stderr.split('\n').forEach(line => {
+        if (line.trim()) appendOutput(line, 'error');
+      });
+    }
+
+    if (result.error) {
+      appendOutput(`Error: ${result.error}`, 'error');
+    }
+
+    return result;
+  } catch (error) {
+    appendOutput(`Failed to run script: ${error.message}`, 'error');
+    return { error: error.message };
+  }
+}
+
+// 초기화 시 리사이저 설정
+document.addEventListener('DOMContentLoaded', () => {
+  setupBottomPanelResizer();
+  setupTerminalListeners();
+});
+
+// ===== 터미널 관련 함수 =====
+
+let terminals = []; // { id, name, output: [] }
+let activeTerminalId = null;
+let currentBottomTab = 'output';
+
+// 하단 탭 전환 (OUTPUT / TERMINAL)
+function switchBottomTab(tabName) {
+  currentBottomTab = tabName;
+
+  // 탭 활성화 상태 업데이트
+  document.querySelectorAll('.bottom-panel-tab').forEach(tab => {
+    if (tab.dataset.panel === tabName) {
+      tab.classList.add('active');
+    } else {
+      tab.classList.remove('active');
+    }
+  });
+
+  // 콘텐츠 표시/숨김
+  const outputContent = document.getElementById('outputContent');
+  const terminalContainer = document.getElementById('terminalContainer');
+  const actionsContainer = document.getElementById('bottomPanelActions');
+
+  if (tabName === 'output') {
+    outputContent.style.display = 'block';
+    terminalContainer.style.display = 'none';
+    actionsContainer.innerHTML = `
+      <div class="bottom-panel-action" onclick="clearOutput()" title="Clear Output">
+        <i class="codicon codicon-clear-all"></i>
+      </div>
+      <div class="bottom-panel-action" onclick="toggleOutputPanel()" title="Close Panel">
+        <i class="codicon codicon-close"></i>
+      </div>
+    `;
+  } else if (tabName === 'terminal') {
+    outputContent.style.display = 'none';
+    terminalContainer.style.display = 'flex';
+    actionsContainer.innerHTML = `
+      <div class="bottom-panel-action" onclick="createNewTerminal()" title="New Terminal">
+        <i class="codicon codicon-plus"></i>
+      </div>
+      <div class="bottom-panel-action" onclick="killActiveTerminal()" title="Kill Terminal">
+        <i class="codicon codicon-trash"></i>
+      </div>
+      <div class="bottom-panel-action" onclick="clearTerminal()" title="Clear Terminal">
+        <i class="codicon codicon-clear-all"></i>
+      </div>
+      <div class="bottom-panel-action" onclick="toggleOutputPanel()" title="Close Panel">
+        <i class="codicon codicon-close"></i>
+      </div>
+    `;
+
+    // 터미널이 없으면 자동 생성
+    if (terminals.length === 0) {
+      createNewTerminal();
+    } else {
+      // 입력 필드에 포커스
+      setTimeout(() => {
+        document.getElementById('terminalInput')?.focus();
+      }, 100);
+    }
+  }
+}
+
+// 새 터미널 생성
+async function createNewTerminal() {
+  try {
+    const result = await window.electronAPI.terminal.create();
+    const terminalNum = terminals.length + 1;
+
+    const terminal = {
+      id: result.terminalId,
+      name: `cmd ${terminalNum}`,
+      cwd: result.cwd,
+      output: []
+    };
+
+    terminals.push(terminal);
+    activeTerminalId = terminal.id;
+
+    renderTerminalList();
+    renderTerminalContent();
+
+    // 입력 필드에 포커스
+    setTimeout(() => {
+      document.getElementById('terminalInput')?.focus();
+    }, 100);
+
+  } catch (error) {
+    console.error('Failed to create terminal:', error);
+    showToast('error', 'Failed to create terminal');
+  }
+}
+
+// 터미널 목록 렌더링
+function renderTerminalList() {
+  const listEl = document.getElementById('terminalList');
+  if (!listEl) return;
+
+  listEl.innerHTML = terminals.map(term => `
+    <div class="terminal-item ${term.id === activeTerminalId ? 'active' : ''}"
+         onclick="switchTerminal('${term.id}')">
+      <i class="codicon codicon-terminal terminal-item-icon"></i>
+      <span class="terminal-item-name">${term.name}</span>
+      <span class="terminal-item-close" onclick="event.stopPropagation(); closeTerminal('${term.id}')">×</span>
+    </div>
+  `).join('');
+}
+
+// 터미널 전환
+function switchTerminal(terminalId) {
+  activeTerminalId = terminalId;
+  renderTerminalList();
+  renderTerminalContent();
+
+  setTimeout(() => {
+    document.getElementById('terminalInput')?.focus();
+  }, 50);
+}
+
+// 터미널 내용 렌더링
+function renderTerminalContent() {
+  const contentEl = document.getElementById('terminalContent');
+  const inputEl = document.getElementById('terminalInput');
+
+  if (!contentEl) return;
+
+  const terminal = terminals.find(t => t.id === activeTerminalId);
+  if (!terminal) {
+    contentEl.innerHTML = '<div class="terminal-output-line">No terminal selected</div>';
+    return;
+  }
+
+  // 출력 라인 렌더링
+  let html = terminal.output.map(line =>
+    `<div class="terminal-output-line ${line.type || ''}">${escapeHtml(line.text)}</div>`
+  ).join('');
+
+  // 현재 입력 라인 표시 (프롬프트 + 타이핑 중인 내용)
+  const currentInput = inputEl ? inputEl.value : '';
+  const shortCwd = terminal.cwd ? terminal.cwd.split(/[\\/]/).pop() : 'cmd';
+  html += `<div class="terminal-output-line"><span style="color:#6a9955">${escapeHtml(shortCwd)}>&nbsp;</span>${escapeHtml(currentInput)}<span class="terminal-cursor"></span></div>`;
+
+  contentEl.innerHTML = html;
+
+  // 스크롤을 맨 아래로
+  contentEl.scrollTop = contentEl.scrollHeight;
+}
+
+// 터미널 입력 포커스
+function focusTerminalInput() {
+  const inputEl = document.getElementById('terminalInput');
+  if (inputEl) {
+    inputEl.focus();
+  }
+}
+
+// 터미널에 출력 추가
+function appendTerminalOutput(terminalId, text, type = '') {
+  const terminal = terminals.find(t => t.id === terminalId);
+  if (!terminal) return;
+
+  // 줄바꿈으로 분리
+  const lines = text.split('\n');
+  lines.forEach(line => {
+    if (line.trim() || lines.length === 1) {
+      terminal.output.push({ text: line, type });
+    }
+  });
+
+  // 활성 터미널이면 화면 업데이트
+  if (terminalId === activeTerminalId) {
+    renderTerminalContent();
+  }
+}
+
+// 터미널 닫기
+async function closeTerminal(terminalId) {
+  try {
+    await window.electronAPI.terminal.kill(terminalId);
+  } catch (e) {
+    // 이미 종료된 경우 무시
+  }
+
+  terminals = terminals.filter(t => t.id !== terminalId);
+
+  if (activeTerminalId === terminalId) {
+    activeTerminalId = terminals.length > 0 ? terminals[terminals.length - 1].id : null;
+  }
+
+  renderTerminalList();
+  renderTerminalContent();
+}
+
+// 활성 터미널 종료
+function killActiveTerminal() {
+  if (activeTerminalId) {
+    closeTerminal(activeTerminalId);
+  }
+}
+
+// 터미널 클리어
+function clearTerminal() {
+  const terminal = terminals.find(t => t.id === activeTerminalId);
+  if (terminal) {
+    terminal.output = [];
+    renderTerminalContent();
+  }
+}
+
+// 터미널 입력 처리
+async function handleTerminalInput(command) {
+  if (!activeTerminalId) return;
+
+  const terminal = terminals.find(t => t.id === activeTerminalId);
+  if (!terminal) return;
+
+  // 입력한 명령어를 출력에 추가
+  const shortCwd = terminal.cwd ? terminal.cwd.split(/[\\/]/).pop() : 'cmd';
+  terminal.output.push({ text: `${shortCwd}> ${command}`, type: '' });
+  renderTerminalContent();
+
+  // 빈 명령어면 전송하지 않음
+  if (!command.trim()) return;
+
+  // 명령어 전송
+  try {
+    await window.electronAPI.terminal.write(activeTerminalId, command);
+  } catch (error) {
+    appendTerminalOutput(activeTerminalId, `Error: ${error.message}`, 'error');
+  }
+}
+
+// 터미널 이벤트 리스너 설정
+function setupTerminalListeners() {
+  // 터미널 데이터 수신
+  window.electronAPI.terminal.onData((data) => {
+    appendTerminalOutput(data.terminalId, data.data, data.isError ? 'error' : '');
+
+    // cd 명령 후 경로 업데이트 시도
+    const terminal = terminals.find(t => t.id === data.terminalId);
+    if (terminal && data.data.includes('>')) {
+      // 프롬프트에서 경로 추출 시도
+      const match = data.data.match(/([A-Za-z]:\\[^\r\n>]*)/);
+      if (match) {
+        terminal.cwd = match[1];
+      }
+    }
+  });
+
+  // 터미널 종료 수신
+  window.electronAPI.terminal.onExit((data) => {
+    appendTerminalOutput(data.terminalId, `\nProcess exited with code ${data.code}`, 'error');
+  });
+
+  // 터미널 입력 필드 이벤트
+  const inputEl = document.getElementById('terminalInput');
+  if (inputEl) {
+    // 입력 중 실시간 업데이트
+    inputEl.addEventListener('input', () => {
+      renderTerminalContent();
+    });
+
+    // Enter 키 처리
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const command = inputEl.value;
+        inputEl.value = '';
+        handleTerminalInput(command);
+      }
+    });
+  }
 }

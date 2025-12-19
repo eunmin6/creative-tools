@@ -60,5 +60,44 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 개발자 도구
   devtools: {
     toggle: () => ipcRenderer.send('devtools:toggle')
+  },
+
+  // 다이얼로그
+  dialog: {
+    openFolder: async () => {
+      return await ipcRenderer.invoke('dialog:openFolder');
+    },
+    openFile: async (options?: { filters?: { name: string; extensions: string[] }[] }) => {
+      return await ipcRenderer.invoke('dialog:openFile', options);
+    }
+  },
+
+  // Python 실행
+  python: {
+    run: async (scriptPath: string, args: string[] = []) => {
+      return await ipcRenderer.invoke('python:run', scriptPath, args);
+    }
+  },
+
+  // 터미널
+  terminal: {
+    create: async () => {
+      return await ipcRenderer.invoke('terminal:create');
+    },
+    write: async (terminalId: string, data: string) => {
+      return await ipcRenderer.invoke('terminal:write', terminalId, data);
+    },
+    kill: async (terminalId: string) => {
+      return await ipcRenderer.invoke('terminal:kill', terminalId);
+    },
+    getCwd: async () => {
+      return await ipcRenderer.invoke('terminal:getCwd');
+    },
+    onData: (callback: (data: { terminalId: string; data: string; isError?: boolean }) => void) => {
+      ipcRenderer.on('terminal:data', (event, data) => callback(data));
+    },
+    onExit: (callback: (data: { terminalId: string; code: number }) => void) => {
+      ipcRenderer.on('terminal:exit', (event, data) => callback(data));
+    }
   }
 });
