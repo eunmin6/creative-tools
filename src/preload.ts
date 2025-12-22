@@ -32,6 +32,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return await ipcRenderer.invoke('fs:writeFile', filePath, content);
     },
 
+    // 파일 이름 변경
+    rename: async (oldPath: string, newPath: string) => {
+      return await ipcRenderer.invoke('fs:rename', oldPath, newPath);
+    },
+
+    // 파일 삭제
+    delete: async (filePath: string) => {
+      return await ipcRenderer.invoke('fs:delete', filePath);
+    },
+
+    // 폴더 삭제 (재귀적)
+    deleteFolder: async (folderPath: string) => {
+      return await ipcRenderer.invoke('fs:deleteFolder', folderPath);
+    },
+
     // 경로 정보 (순수 JavaScript로 처리)
     path: {
       basename: (filePath: string) => {
@@ -76,13 +91,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
   python: {
     run: async (scriptPath: string, args: string[] = []) => {
       return await ipcRenderer.invoke('python:run', scriptPath, args);
+    },
+    runStreaming: async (scriptPath: string, args: string[] = []) => {
+      return await ipcRenderer.invoke('python:runStreaming', scriptPath, args);
+    },
+    kill: async (processId: string) => {
+      return await ipcRenderer.invoke('python:kill', processId);
+    },
+    onOutput: (callback: (data: { processId: string; data: string; isError?: boolean }) => void) => {
+      ipcRenderer.on('python:output', (event, data) => callback(data));
+    },
+    onExit: (callback: (data: { processId: string; code: number; error?: string }) => void) => {
+      ipcRenderer.on('python:exit', (event, data) => callback(data));
+    }
+  },
+
+  // Shell (파일 열기)
+  shell: {
+    openPath: async (filePath: string) => {
+      return await ipcRenderer.invoke('shell:openPath', filePath);
     }
   },
 
   // 터미널
   terminal: {
-    create: async () => {
-      return await ipcRenderer.invoke('terminal:create');
+    create: async (cwd?: string) => {
+      return await ipcRenderer.invoke('terminal:create', cwd);
     },
     write: async (terminalId: string, data: string) => {
       return await ipcRenderer.invoke('terminal:write', terminalId, data);
@@ -98,6 +132,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     onExit: (callback: (data: { terminalId: string; code: number }) => void) => {
       ipcRenderer.on('terminal:exit', (event, data) => callback(data));
+    }
+  },
+
+  // 파일 감시 (Chokidar)
+  fileWatch: {
+    start: async (filePath: string) => {
+      return await ipcRenderer.invoke('fileWatch:start', filePath);
+    },
+    stop: async (filePath: string) => {
+      return await ipcRenderer.invoke('fileWatch:stop', filePath);
+    },
+    stopAll: async () => {
+      return await ipcRenderer.invoke('fileWatch:stopAll');
+    },
+    onChanged: (callback: (filePath: string) => void) => {
+      ipcRenderer.on('fileWatch:changed', (event, filePath) => callback(filePath));
+    },
+    onDeleted: (callback: (filePath: string) => void) => {
+      ipcRenderer.on('fileWatch:deleted', (event, filePath) => callback(filePath));
     }
   }
 });

@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@vscode/codicons": "^0.0.44",
+    "chokidar": "^3.6.0",
     "monaco-editor": "^0.55.1"
   },
   "build": {

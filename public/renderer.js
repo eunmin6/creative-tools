@@ -22,6 +22,191 @@ function initializeApp() {
   setupSidebarResizer();
   setupGlobalKeyboardEvents();
   initMonaco();
+  setupPythonStreamListeners();
+  setupFileWatchListeners();
+  initChat();
+}
+
+// 파일 감시 이벤트 리스너 설정
+function setupFileWatchListeners() {
+  // 파일 변경 이벤트
+  window.electronAPI.fileWatch.onChanged((filePath) => {
+    console.log('File changed:', filePath);
+    handleFileChanged(filePath);
+  });
+
+  // 파일 삭제 이벤트
+  window.electronAPI.fileWatch.onDeleted((filePath) => {
+    console.log('File deleted:', filePath);
+    handleFileDeleted(filePath);
+  });
+}
+
+// 파일 변경 처리
+async function handleFileChanged(filePath) {
+  // 해당 파일이 열린 탭인지 확인
+  const tabIndex = openTabs.findIndex(tab => tab.filePath === filePath);
+  if (tabIndex === -1) return;
+
+  const tab = openTabs[tabIndex];
+
+  // 변경사항이 없는 경우 자동으로 리로드
+  if (tab.content === tab.originalContent) {
+    // 파일 다시 읽기
+    const newContent = await window.electronAPI.fs.readFile(filePath);
+    tab.content = newContent;
+    tab.originalContent = newContent;
+
+    // 현재 활성 탭이면 에디터 내용 업데이트
+    if (tabIndex === activeTabIndex) {
+      if (monacoEditor && tab.type === 'text') {
+        const currentPosition = monacoEditor.getPosition();
+        monacoEditor.setValue(newContent);
+        if (currentPosition) {
+          monacoEditor.setPosition(currentPosition);
+        }
+      } else if (tab.type === 'canvas') {
+        renderActiveTabContent();
+      }
+    }
+
+    console.log('File auto-reloaded:', filePath);
+  } else {
+    // 변경사항이 있는 경우 사용자에게 알림
+    showFileChangedNotification(tabIndex, filePath);
+  }
+}
+
+// 파일 변경 알림 표시
+function showFileChangedNotification(tabIndex, filePath) {
+  const tab = openTabs[tabIndex];
+  const fileName = tab.fileName;
+
+  showModal(
+    'File Changed',
+    `The file "${fileName}" has been changed externally. Do you want to reload it? Your unsaved changes will be lost.`,
+    async () => {
+      // Reload 버튼 클릭
+      const newContent = await window.electronAPI.fs.readFile(filePath);
+      tab.content = newContent;
+      tab.originalContent = newContent;
+
+      if (tabIndex === activeTabIndex) {
+        if (monacoEditor && tab.type === 'text') {
+          monacoEditor.setValue(newContent);
+        } else {
+          renderActiveTabContent();
+        }
+      }
+      renderTabs(); // 변경 표시(*) 업데이트
+    },
+    () => {
+      // Keep My Changes 버튼 클릭 - 현재 내용 유지
+      // originalContent를 현재 외부 내용으로 업데이트하여 다음 변경 감지 가능
+    },
+    null,
+    'Reload',
+    'Keep My Changes'
+  );
+}
+
+// 파일 삭제 처리
+function handleFileDeleted(filePath) {
+  // 해당 파일이 열린 탭인지 확인
+  const tabIndex = openTabs.findIndex(tab => tab.filePath === filePath);
+  if (tabIndex === -1) return;
+
+  const tab = openTabs[tabIndex];
+  const fileName = tab.fileName;
+
+  showModal(
+    'File Deleted',
+    `The file "${fileName}" has been deleted externally.`,
+    () => {
+      // Close Tab 버튼 클릭
+      performCloseTab(tabIndex);
+    },
+    () => {
+      // Keep Open 버튼 클릭 - 탭 유지 (저장 시 새로 생성됨)
+    },
+    null,
+    'Close Tab',
+    'Keep Open'
+  );
+}
+
+// Python 스트리밍 이벤트 리스너 설정
+function setupPythonStreamListeners() {
+  // Python 출력 이벤트
+  window.electronAPI.python.onOutput((data) => {
+    if (data.processId === currentPythonProcessId) {
+      handlePythonOutput(data.data, data.isError);
+    }
+  });
+
+  // Python 종료 이벤트
+  window.electronAPI.python.onExit((data) => {
+    if (data.processId === currentPythonProcessId) {
+      handlePythonExit(data.code, data.error);
+    }
+  });
+}
+
+// Python 출력 처리
+function handlePythonOutput(output, isError) {
+  const lines = output.split('\n');
+  for (const line of lines) {
+    if (!line.trim()) continue;
+
+    // PROGRESS:current/total 형식 파싱
+    if (line.startsWith('PROGRESS:')) {
+      const match = line.match(/PROGRESS:(\d+)\/(\d+)/);
+      if (match) {
+        const current = parseInt(match[1]);
+        const total = parseInt(match[2]);
+        const percent = Math.round((current / total) * 100);
+        updateTcProgress(percent, `Processing ${current} of ${total}...`);
+      }
+    }
+    // CREATED:filename 형식 파싱
+    else if (line.startsWith('CREATED:')) {
+      const fileName = line.replace('CREATED:', '').trim();
+      updateTcCurrentFile(fileName);
+      appendOutput(`Created: ${fileName}`, 'success');
+
+      // Explorer 새로고침 및 파일 하이라이트
+      refreshExplorer().then(() => {
+        highlightFileInExplorer(currentProjectPath + '\\testcase\\' + fileName);
+      });
+    }
+    // 일반 출력
+    else {
+      appendOutput(line, isError ? 'error' : 'info');
+    }
+  }
+}
+
+// Python 종료 처리
+function handlePythonExit(code, error) {
+  if (code === 0) {
+    updateTcProgress(100, 'Completed!');
+    appendOutput('TC Sync completed successfully!', 'success');
+  } else if (error) {
+    appendOutput(`Error: ${error}`, 'error');
+    updateTcProgress(0, 'Error');
+  } else {
+    appendOutput(`Process exited with code ${code}`, 'warning');
+    updateTcProgress(0, 'Stopped');
+  }
+
+  tcSyncRunning = false;
+  currentPythonProcessId = null;
+
+  // UI 상태 복원
+  const startBtn = document.getElementById('tcStartBtn');
+  const stopBtn = document.getElementById('tcStopBtn');
+  if (startBtn) startBtn.style.display = 'flex';
+  if (stopBtn) stopBtn.style.display = 'none';
 }
 
 // Monaco Editor 초기화
@@ -48,10 +233,62 @@ function initMonaco() {
 // 전역 키보드 이벤트 설정
 function setupGlobalKeyboardEvents() {
   document.addEventListener('keydown', handleCanvasKeyDown);
+  document.addEventListener('keydown', handleExplorerKeyDown);
+}
+
+// Explorer 키보드 이벤트 처리
+function handleExplorerKeyDown(e) {
+  // Monaco Editor나 터미널에 포커스가 있으면 무시
+  const activeElement = document.activeElement;
+  if (activeElement && (
+    activeElement.closest('#monaco-container') ||
+    activeElement.closest('#terminalContent') ||
+    activeElement.tagName === 'INPUT' ||
+    activeElement.tagName === 'TEXTAREA'
+  )) {
+    return;
+  }
+
+  // Delete 키로 선택된 파일/폴더 삭제 (다중 선택 지원)
+  if (e.key === 'Delete') {
+    const itemsToDelete = getSelectedItems();
+    if (itemsToDelete.length > 0) {
+      e.preventDefault();
+      deleteSelectedItems(itemsToDelete);
+    }
+  }
+
+  // F2 키로 선택된 파일/폴더 이름 변경
+  if (e.key === 'F2' && selectedItemPath) {
+    e.preventDefault();
+    startInlineRename(selectedItemPath, selectedItemName, selectedItemIsFolder);
+  }
 }
 
 // 현재 프로젝트 경로
 let currentProjectPath = null;
+
+// TC ID로 testcase 파일 열기
+async function openTestcaseFile(tcId) {
+  if (!currentProjectPath || !tcId) return;
+
+  // testcase 폴더에서 TC ID.md 파일 찾기
+  const testcasePath = `${currentProjectPath}/testcase/${tcId}.md`;
+
+  try {
+    // 파일 존재 확인 및 열기
+    const content = await window.electronAPI.fs.readFile(testcasePath);
+    if (content !== null) {
+      // 파일 열기
+      openFileInEditor(testcasePath);
+    } else {
+      showToast('error', `Testcase file not found: ${tcId}.md`);
+    }
+  } catch (error) {
+    console.error('Error opening testcase file:', error);
+    showToast('error', `Failed to open testcase: ${tcId}`);
+  }
+}
 
 // 프로젝트 파일 로드
 async function loadProjectFiles(customPath = null) {
@@ -134,6 +371,43 @@ function createFolderElement(name, fullPath, isRoot = false, depth = 0) {
   label.textContent = name;
   folder.appendChild(label);
 
+  // 루트 폴더에 Refresh 버튼 추가
+  if (isRoot) {
+    const refreshBtn = document.createElement('span');
+    refreshBtn.className = 'explorer-refresh-btn';
+    refreshBtn.innerHTML = '<i class="codicon codicon-refresh"></i>';
+    refreshBtn.title = 'Refresh Explorer';
+    refreshBtn.style.cssText = 'margin-left: auto; padding: 2px 6px; cursor: pointer; opacity: 0.6; display: flex; align-items: center;';
+    refreshBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      refreshExplorer();
+      showToast('info', 'Explorer refreshed');
+    });
+    refreshBtn.addEventListener('mouseenter', () => {
+      refreshBtn.style.opacity = '1';
+    });
+    refreshBtn.addEventListener('mouseleave', () => {
+      refreshBtn.style.opacity = '0.6';
+    });
+    folder.appendChild(refreshBtn);
+    folder.style.display = 'flex';
+    folder.style.alignItems = 'center';
+  }
+
+  // 우클릭 컨텍스트 메뉴 (루트 폴더 제외)
+  if (!isRoot) {
+    folder.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // testcase로 시작하는 폴더는 전용 메뉴 표시
+      if (name.toLowerCase().startsWith('testcase')) {
+        showTestcaseFolderContextMenu(e, fullPath, name);
+      } else {
+        showContextMenu(e, fullPath, name, true);
+      }
+    });
+  }
+
   return folder;
 }
 
@@ -163,7 +437,1019 @@ function createFileElement(name, fullPath, depth = 0) {
   label.textContent = name;
   file.appendChild(label);
 
+  // 우클릭 컨텍스트 메뉴
+  file.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // 엑셀 파일인 경우 전용 메뉴 표시
+    if (isExcelFile(fullPath)) {
+      showExcelContextMenu(e, fullPath, name);
+    } else {
+      showContextMenu(e, fullPath, name, false);
+    }
+  });
+
   return file;
+}
+
+// 현재 선택된 파일/폴더 정보
+let contextMenuTargetPath = null;
+let contextMenuTargetName = null;
+let contextMenuTargetIsFolder = false;
+
+// Explorer에서 선택된 파일/폴더
+let selectedItemPath = null;
+let selectedItemName = null;
+let selectedItemIsFolder = false;
+
+// 다중 선택 지원
+let multiSelectedItems = new Set(); // { path, name, isFolder } 객체들의 Set
+let lastClickedItemPath = null; // Shift 선택용
+
+// 컨텍스트 메뉴 표시 (파일/폴더 공용)
+function showContextMenu(e, itemPath, itemName, isFolder = false) {
+  contextMenuTargetPath = itemPath;
+  contextMenuTargetName = itemName;
+  contextMenuTargetIsFolder = isFolder;
+
+  const menu = document.getElementById('fileContextMenu');
+  menu.style.display = 'block';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+
+  // 화면 밖으로 나가지 않도록 조정
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) {
+    menu.style.left = (window.innerWidth - rect.width - 5) + 'px';
+  }
+  if (rect.bottom > window.innerHeight) {
+    menu.style.top = (window.innerHeight - rect.height - 5) + 'px';
+  }
+
+  // 다른 곳 클릭하면 메뉴 닫기
+  setTimeout(() => {
+    document.addEventListener('click', hideContextMenu);
+    document.addEventListener('contextmenu', hideContextMenu);
+  }, 0);
+}
+
+// 컨텍스트 메뉴 숨기기
+function hideContextMenu() {
+  const menu = document.getElementById('fileContextMenu');
+  const testcaseMenu = document.getElementById('testcaseFolderContextMenu');
+  const excelMenu = document.getElementById('excelContextMenu');
+  menu.style.display = 'none';
+  testcaseMenu.style.display = 'none';
+  excelMenu.style.display = 'none';
+  document.removeEventListener('click', hideContextMenu);
+  document.removeEventListener('contextmenu', hideContextMenu);
+}
+
+// Excel 파일 컨텍스트 메뉴 표시
+function showExcelContextMenu(e, filePath, fileName) {
+  contextMenuTargetPath = filePath;
+  contextMenuTargetName = fileName;
+  contextMenuTargetIsFolder = false;
+
+  const menu = document.getElementById('excelContextMenu');
+  menu.style.display = 'block';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+
+  // 화면 밖으로 나가지 않도록 조정
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) {
+    menu.style.left = (window.innerWidth - rect.width - 5) + 'px';
+  }
+  if (rect.bottom > window.innerHeight) {
+    menu.style.top = (window.innerHeight - rect.height - 5) + 'px';
+  }
+
+  // 다른 곳 클릭하면 메뉴 닫기
+  setTimeout(() => {
+    document.addEventListener('click', hideContextMenu);
+    document.addEventListener('contextmenu', hideContextMenu);
+  }, 0);
+}
+
+// Excel 프로그램으로 열기
+function openExcelWithProgram() {
+  const filePath = contextMenuTargetPath;
+  hideContextMenu();
+  if (filePath) {
+    openWithDefaultProgram(filePath);
+  }
+}
+
+// testcase 폴더 전용 컨텍스트 메뉴 표시
+function showTestcaseFolderContextMenu(e, folderPath, folderName) {
+  contextMenuTargetPath = folderPath;
+  contextMenuTargetName = folderName;
+  contextMenuTargetIsFolder = true;
+
+  const menu = document.getElementById('testcaseFolderContextMenu');
+  menu.style.display = 'block';
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+
+  // 화면 밖으로 나가지 않도록 조정
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) {
+    menu.style.left = (window.innerWidth - rect.width - 5) + 'px';
+  }
+  if (rect.bottom > window.innerHeight) {
+    menu.style.top = (window.innerHeight - rect.height - 5) + 'px';
+  }
+
+  // 다른 곳 클릭하면 메뉴 닫기
+  setTimeout(() => {
+    document.addEventListener('click', hideContextMenu);
+    document.addEventListener('contextmenu', hideContextMenu);
+  }, 0);
+}
+
+// Categorize 탭 열기
+function openCategorize() {
+  const folderPath = contextMenuTargetPath;
+  const folderName = contextMenuTargetName;
+
+  hideContextMenu();
+
+  if (!folderPath) return;
+
+  // 이미 열려있는지 확인
+  const existingTabIndex = openTabs.findIndex(tab =>
+    tab.type === 'categorize' && tab.folderPath === folderPath
+  );
+
+  if (existingTabIndex !== -1) {
+    activeTabIndex = existingTabIndex;
+    renderTabs();
+    renderCategorize(folderPath, folderName);
+    return;
+  }
+
+  // 새 탭 추가
+  openTabs.push({
+    type: 'categorize',
+    fileName: `Categorize: ${folderName}`,
+    folderPath: folderPath,
+    folderName: folderName
+  });
+
+  activeTabIndex = openTabs.length - 1;
+  renderTabs();
+  renderCategorize(folderPath, folderName);
+}
+
+// Category Viewer 열기 (Excel 파일용)
+async function openCategoryViewer() {
+  const filePath = contextMenuTargetPath;
+  const fileName = contextMenuTargetName;
+
+  hideContextMenu();
+
+  if (!filePath) return;
+
+  // 이미 열려있는지 확인
+  const existingTabIndex = openTabs.findIndex(tab =>
+    tab.type === 'categoryViewer' && tab.filePath === filePath
+  );
+
+  if (existingTabIndex !== -1) {
+    activeTabIndex = existingTabIndex;
+    renderTabs();
+    renderCategoryViewer(openTabs[existingTabIndex]);
+    return;
+  }
+
+  // Excel 데이터 읽기
+  appendOutput('info', `Reading Excel file: ${fileName}`);
+
+  try {
+    const projectRoot = await window.electronAPI.getProjectRoot();
+    const scriptPath = `${projectRoot}/scripts/excel_reader.py`;
+    const result = await window.electronAPI.python.run(scriptPath, [filePath]);
+
+    if (result.error) {
+      appendOutput('error', `Failed to read Excel: ${result.error}`);
+      if (result.stderr) {
+        appendOutput('error', result.stderr);
+      }
+      showToast('error', 'Failed to read Excel file');
+      return;
+    }
+
+    const data = JSON.parse(result.stdout);
+    if (!data.success) {
+      appendOutput('error', `Excel read error: ${data.error}`);
+      showToast('error', data.error);
+      return;
+    }
+
+    // 새 탭 추가
+    openTabs.push({
+      type: 'categoryViewer',
+      fileName: 'View Category',
+      filePath: filePath,
+      excelData: data,
+      activeSubTab: 'overview'
+    });
+
+    activeTabIndex = openTabs.length - 1;
+    renderTabs();
+    renderCategoryViewer(openTabs[activeTabIndex]);
+
+    appendOutput('success', `Loaded ${data.rows.length} rows from Excel`);
+  } catch (error) {
+    console.error('Error opening category viewer:', error);
+    appendOutput('error', `Error: ${error.message}`);
+    showToast('error', 'Failed to open category viewer');
+  }
+}
+
+// Category Viewer 렌더링
+function renderCategoryViewer(tab) {
+  const editorArea = document.querySelector('.editor-area');
+  const data = tab.excelData;
+  const rows = data.rows;
+  const activeSubTab = tab.activeSubTab || 'overview';
+
+  // 통계 계산
+  const stats = calculateCategoryStats(rows);
+
+  editorArea.innerHTML = `
+    <div class="category-viewer" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; height: 100%; display: flex; flex-direction: column; overflow: hidden;">
+      <!-- 서브 탭 헤더 -->
+      <div class="subtab-header" style="display: flex; background: #2d2d2d; border-bottom: 1px solid #3c3c3c; flex-shrink: 0;">
+        <div class="subtab ${activeSubTab === 'overview' ? 'active' : ''}" data-subtab="overview" onclick="switchCategorySubTab('overview')" style="padding: 10px 20px; cursor: pointer; color: ${activeSubTab === 'overview' ? '#ffffff' : '#858585'}; border-bottom: 2px solid ${activeSubTab === 'overview' ? '#007acc' : 'transparent'}; transition: all 0.2s;">Overview</div>
+        <div class="subtab ${activeSubTab === 'modules' ? 'active' : ''}" data-subtab="modules" onclick="switchCategorySubTab('modules')" style="padding: 10px 20px; cursor: pointer; color: ${activeSubTab === 'modules' ? '#ffffff' : '#858585'}; border-bottom: 2px solid ${activeSubTab === 'modules' ? '#007acc' : 'transparent'}; transition: all 0.2s;">Modules</div>
+        <div class="subtab ${activeSubTab === 'implGroups' ? 'active' : ''}" data-subtab="implGroups" onclick="switchCategorySubTab('implGroups')" style="padding: 10px 20px; cursor: pointer; color: ${activeSubTab === 'implGroups' ? '#ffffff' : '#858585'}; border-bottom: 2px solid ${activeSubTab === 'implGroups' ? '#007acc' : 'transparent'}; transition: all 0.2s;">Impl Groups</div>
+        <div class="subtab ${activeSubTab === 'testMethods' ? 'active' : ''}" data-subtab="testMethods" onclick="switchCategorySubTab('testMethods')" style="padding: 10px 20px; cursor: pointer; color: ${activeSubTab === 'testMethods' ? '#ffffff' : '#858585'}; border-bottom: 2px solid ${activeSubTab === 'testMethods' ? '#007acc' : 'transparent'}; transition: all 0.2s;">Test Methods</div>
+      </div>
+
+      <!-- 서브 탭 컨텐츠 -->
+      <div class="subtab-content" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+        ${renderCategorySubTabContent(activeSubTab, rows, stats)}
+      </div>
+    </div>
+  `;
+
+  // 필터 이벤트 설정 (Overview 탭일 때만)
+  if (activeSubTab === 'overview') {
+    setupFilterEvents(rows);
+  }
+}
+
+// 서브 탭 전환
+function switchCategorySubTab(subTabName) {
+  const tab = openTabs[activeTabIndex];
+  if (!tab || tab.type !== 'categoryViewer') return;
+
+  tab.activeSubTab = subTabName;
+  renderCategoryViewer(tab);
+}
+
+// 서브 탭 컨텐츠 렌더링
+function renderCategorySubTabContent(subTab, rows, stats) {
+  switch (subTab) {
+    case 'overview':
+      return renderOverviewTab(rows, stats);
+    case 'modules':
+      return renderGroupedTab(rows, 'Module_Group', 'Modules', '#ffb74d', stats.modules);
+    case 'implGroups':
+      return renderGroupedTab(rows, 'Impl_Group', 'Impl Groups', '#ba68c8', stats.implGroups);
+    case 'testMethods':
+      return renderTestMethodsTab(rows, stats.testMethods);
+    default:
+      return renderOverviewTab(rows, stats);
+  }
+}
+
+// Overview 탭 렌더링
+function renderOverviewTab(rows, stats) {
+  return `
+    <div style="padding: 20px; height: 100%; display: flex; flex-direction: column; overflow: hidden;">
+      <!-- 상단 통계 요약 -->
+      <div class="stats-summary" style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; flex-shrink: 0;">
+        <div class="stat-card" style="background: #2d2d30; padding: 15px 20px; border-radius: 6px; min-width: 150px;">
+          <div style="font-size: 24px; font-weight: 600; color: #4fc3f7;">${rows.length}</div>
+          <div style="font-size: 13px; color: #858585; margin-top: 4px;">Total TCs</div>
+        </div>
+        <div class="stat-card" style="background: #2d2d30; padding: 15px 20px; border-radius: 6px; min-width: 150px;">
+          <div style="font-size: 24px; font-weight: 600; color: #81c784;">${stats.automation.yes} / ${rows.length}</div>
+          <div style="font-size: 13px; color: #858585; margin-top: 4px;">Automation (Y)</div>
+        </div>
+        <div class="stat-card" style="background: #2d2d30; padding: 15px 20px; border-radius: 6px; min-width: 150px;">
+          <div style="font-size: 24px; font-weight: 600; color: #ffb74d;">${stats.modules.size}</div>
+          <div style="font-size: 13px; color: #858585; margin-top: 4px;">Modules</div>
+        </div>
+        <div class="stat-card" style="background: #2d2d30; padding: 15px 20px; border-radius: 6px; min-width: 150px;">
+          <div style="font-size: 24px; font-weight: 600; color: #ba68c8;">${stats.implGroups.size}</div>
+          <div style="font-size: 13px; color: #858585; margin-top: 4px;">Impl Groups</div>
+        </div>
+        <div class="stat-card" style="background: #2d2d30; padding: 15px 20px; border-radius: 6px; min-width: 150px;">
+          <div style="font-size: 24px; font-weight: 600; color: #4db6ac;">${stats.testMethods.size}</div>
+          <div style="font-size: 13px; color: #858585; margin-top: 4px;">Test Methods</div>
+        </div>
+      </div>
+
+      <!-- 필터 섹션 -->
+      <div class="filter-section" style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px; flex-shrink: 0;">
+        ${createFilterDropdown('automation', 'Automation', stats.automation.values)}
+        ${createFilterDropdown('module', 'Module', [...stats.modules])}
+        ${createFilterDropdown('implGroup', 'Impl Group', [...stats.implGroups])}
+        ${createFilterDropdown('testMethod', 'Test Method', [...stats.testMethods])}
+      </div>
+
+      <!-- 선택된 필터 표시 -->
+      <div id="activeFilters" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px; min-height: 28px; flex-shrink: 0;"></div>
+
+      <!-- 결과 카운트 -->
+      <div style="font-size: 13px; color: #858585; margin-bottom: 10px; flex-shrink: 0;">
+        Showing <span id="filteredCount">${rows.length}</span> of ${rows.length} TCs
+      </div>
+
+      <!-- 리스트 뷰 -->
+      <div class="list-view-container" style="flex: 1; overflow: auto; background: #1e1e1e; border: 1px solid #3c3c3c; border-radius: 4px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <thead style="position: sticky; top: 0; background: #2d2d30; z-index: 1;">
+            <tr>
+              <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid #3c3c3c; color: #cccccc;">TC ID</th>
+              <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid #3c3c3c; color: #cccccc;">Module</th>
+              <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid #3c3c3c; color: #cccccc;">Impl Group</th>
+              <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid #3c3c3c; color: #cccccc;">Automation</th>
+              <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid #3c3c3c; color: #cccccc;">Test Methods</th>
+            </tr>
+          </thead>
+          <tbody id="tcListBody">
+            ${renderTCRows(rows)}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// 그룹별 탭 렌더링 (Modules, Impl Groups)
+function renderGroupedTab(rows, groupKey, title, color, groupSet) {
+  // 그룹별 카운트 계산
+  const groupCounts = {};
+  rows.forEach(row => {
+    const group = row[groupKey] || row['Module'] || 'Unknown';
+    if (!groupCounts[group]) {
+      groupCounts[group] = [];
+    }
+    groupCounts[group].push(row);
+  });
+
+  const sortedGroups = Object.entries(groupCounts).sort((a, b) => b[1].length - a[1].length);
+
+  return `
+    <div style="padding: 20px; height: 100%; overflow: auto;">
+      <div style="font-size: 16px; font-weight: 600; color: #cccccc; margin-bottom: 20px;">
+        ${title} <span style="color: ${color}; margin-left: 8px;">(${sortedGroups.length})</span>
+      </div>
+      <div class="grouped-list">
+        ${sortedGroups.map(([groupName, groupRows], idx) => `
+          <div class="group-item" style="margin-bottom: 2px;">
+            <div class="group-header" onclick="toggleGroupExpand(${idx})" style="display: flex; align-items: center; padding: 12px 16px; background: #2d2d30; cursor: pointer; border-radius: 4px; transition: background 0.2s;">
+              <span class="group-chevron" id="chevron-${idx}" style="margin-right: 10px; color: #858585; transition: transform 0.2s;">▶</span>
+              <span style="flex: 1; font-size: 14px; color: #cccccc;">${groupName}</span>
+              <span style="background: ${color}; color: #1e1e1e; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600;">${groupRows.length}</span>
+            </div>
+            <div class="group-content" id="group-content-${idx}" style="display: none; margin-left: 26px; border-left: 2px solid #3c3c3c; margin-top: 2px;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <thead style="background: #252526;">
+                  <tr>
+                    <th style="padding: 8px 12px; text-align: left; color: #858585; font-weight: normal;">TC ID</th>
+                    <th style="padding: 8px 12px; text-align: left; color: #858585; font-weight: normal;">Automation</th>
+                    <th style="padding: 8px 12px; text-align: left; color: #858585; font-weight: normal;">Impl Group</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${groupRows.map(row => {
+                    const rowTcId = row['TC_ID'] || row['ID'] || '';
+                    return `
+                    <tr style="border-bottom: 1px solid #2d2d2d;">
+                      <td style="padding: 8px 12px;"><span onclick="openTestcaseFile('${rowTcId}')" style="color: #4fc3f7; cursor: pointer; text-decoration: underline;">${rowTcId}</span></td>
+                      <td style="padding: 8px 12px;"><span style="background: ${(row['Automation'] || '').toUpperCase().includes('Y') ? '#2e7d32' : '#616161'}; padding: 2px 8px; border-radius: 3px; font-size: 12px;">${row['Automation'] || ''}</span></td>
+                      <td style="padding: 8px 12px; color: #cccccc;">${row['Impl_Group'] || ''}</td>
+                    </tr>
+                  `}).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// Test Methods 탭 렌더링
+function renderTestMethodsTab(rows, testMethodSet) {
+  // 테스트 메소드별 카운트 계산
+  const methodCounts = {};
+  [...testMethodSet].forEach(method => {
+    methodCounts[method] = rows.filter(row => {
+      const key = `TM_${method}`;
+      return row[key] === 'Y' || row[key] === 'True' || row[key] === 'TRUE' || row[key] === '1';
+    });
+  });
+
+  const sortedMethods = Object.entries(methodCounts).sort((a, b) => b[1].length - a[1].length);
+
+  return `
+    <div style="padding: 20px; height: 100%; overflow: auto;">
+      <div style="font-size: 16px; font-weight: 600; color: #cccccc; margin-bottom: 20px;">
+        Test Methods <span style="color: #4db6ac; margin-left: 8px;">(${sortedMethods.length})</span>
+      </div>
+      <div class="grouped-list">
+        ${sortedMethods.map(([methodName, methodRows], idx) => `
+          <div class="group-item" style="margin-bottom: 2px;">
+            <div class="group-header" onclick="toggleGroupExpand(${idx + 1000})" style="display: flex; align-items: center; padding: 12px 16px; background: #2d2d30; cursor: pointer; border-radius: 4px; transition: background 0.2s;">
+              <span class="group-chevron" id="chevron-${idx + 1000}" style="margin-right: 10px; color: #858585; transition: transform 0.2s;">▶</span>
+              <span style="flex: 1; font-size: 14px; color: #cccccc;">${methodName}</span>
+              <span style="background: #4db6ac; color: #1e1e1e; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600;">${methodRows.length}</span>
+            </div>
+            <div class="group-content" id="group-content-${idx + 1000}" style="display: none; margin-left: 26px; border-left: 2px solid #3c3c3c; margin-top: 2px;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <thead style="background: #252526;">
+                  <tr>
+                    <th style="padding: 8px 12px; text-align: left; color: #858585; font-weight: normal;">TC ID</th>
+                    <th style="padding: 8px 12px; text-align: left; color: #858585; font-weight: normal;">Module</th>
+                    <th style="padding: 8px 12px; text-align: left; color: #858585; font-weight: normal;">Automation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${methodRows.map(row => {
+                    const rowTcId = row['TC_ID'] || row['ID'] || '';
+                    return `
+                    <tr style="border-bottom: 1px solid #2d2d2d;">
+                      <td style="padding: 8px 12px;"><span onclick="openTestcaseFile('${rowTcId}')" style="color: #4fc3f7; cursor: pointer; text-decoration: underline;">${rowTcId}</span></td>
+                      <td style="padding: 8px 12px; color: #cccccc;">${row['Module_Group'] || row['Module'] || ''}</td>
+                      <td style="padding: 8px 12px;"><span style="background: ${(row['Automation'] || '').toUpperCase().includes('Y') ? '#2e7d32' : '#616161'}; padding: 2px 8px; border-radius: 3px; font-size: 12px;">${row['Automation'] || ''}</span></td>
+                    </tr>
+                  `}).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// 그룹 확장/축소 토글
+function toggleGroupExpand(idx) {
+  const content = document.getElementById(`group-content-${idx}`);
+  const chevron = document.getElementById(`chevron-${idx}`);
+
+  if (content.style.display === 'none') {
+    content.style.display = 'block';
+    chevron.style.transform = 'rotate(90deg)';
+  } else {
+    content.style.display = 'none';
+    chevron.style.transform = 'rotate(0deg)';
+  }
+}
+
+// 통계 계산
+function calculateCategoryStats(rows) {
+  const stats = {
+    automation: { yes: 0, no: 0, values: ['Y', 'N'] },
+    modules: new Set(),
+    implGroups: new Set(),
+    testMethods: new Set()
+  };
+
+  rows.forEach(row => {
+    // Automation
+    const automation = row['Automation'] || '';
+    if (automation.toUpperCase() === 'Y' || automation.includes('Y')) {
+      stats.automation.yes++;
+    } else {
+      stats.automation.no++;
+    }
+
+    // Module
+    const module = row['Module_Group'] || row['Module'] || '';
+    if (module) stats.modules.add(module);
+
+    // Impl Group
+    const implGroup = row['Impl_Group'] || '';
+    if (implGroup) stats.implGroups.add(implGroup);
+
+    // Test Methods (TM_* columns)
+    Object.keys(row).forEach(key => {
+      if (key.startsWith('TM_') && (row[key] === 'Y' || row[key] === 'True' || row[key] === 'TRUE' || row[key] === '1')) {
+        stats.testMethods.add(key.replace('TM_', ''));
+      }
+    });
+  });
+
+  return stats;
+}
+
+// 필터 드롭다운 생성
+function createFilterDropdown(id, label, values) {
+  const options = values.map(v => `<label style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; transition: background 0.1s;">
+    <input type="checkbox" value="${v}" style="cursor: pointer;">
+    <span>${v}</span>
+  </label>`).join('');
+
+  return `
+    <div class="filter-dropdown" style="position: relative;">
+      <button id="filter-btn-${id}" onclick="toggleFilterDropdown('${id}')"
+        style="background: #3c3c3c; border: 1px solid #555; color: #cccccc; padding: 8px 12px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13px;">
+        <span>${label}</span>
+        <span style="font-size: 10px;">▼</span>
+      </button>
+      <div id="filter-menu-${id}" class="filter-menu" style="display: none; position: absolute; top: 100%; left: 0; background: #252526; border: 1px solid #454545; border-radius: 4px; min-width: 180px; max-height: 250px; overflow-y: auto; z-index: 100; margin-top: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
+        <div style="padding: 8px 10px; border-bottom: 1px solid #3c3c3c; display: flex; gap: 8px;">
+          <button onclick="selectAllFilter('${id}')" style="background: #0e639c; border: none; color: white; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">All</button>
+          <button onclick="clearFilter('${id}')" style="background: #3c3c3c; border: none; color: #cccccc; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">Clear</button>
+        </div>
+        <div class="filter-options" data-filter="${id}">
+          ${options}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// 필터 드롭다운 토글
+function toggleFilterDropdown(id) {
+  const menu = document.getElementById(`filter-menu-${id}`);
+  const isVisible = menu.style.display === 'block';
+
+  // 모든 메뉴 닫기
+  document.querySelectorAll('.filter-menu').forEach(m => m.style.display = 'none');
+
+  if (!isVisible) {
+    menu.style.display = 'block';
+  }
+}
+
+// 전체 선택
+function selectAllFilter(id) {
+  const options = document.querySelector(`.filter-options[data-filter="${id}"]`);
+  options.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+  applyFilters();
+}
+
+// 필터 해제
+function clearFilter(id) {
+  const options = document.querySelector(`.filter-options[data-filter="${id}"]`);
+  options.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+  applyFilters();
+}
+
+// TC 행 렌더링
+function renderTCRows(rows) {
+  return rows.map(row => {
+    const tcId = row['TC_ID'] || row['ID'] || Object.values(row)[0] || '';
+    const module = row['Module_Group'] || row['Module'] || '';
+    const implGroup = row['Impl_Group'] || '';
+    const automation = row['Automation'] || '';
+
+    // Test Methods 수집
+    const testMethods = Object.keys(row)
+      .filter(key => key.startsWith('TM_') && (row[key] === 'Y' || row[key] === 'True' || row[key] === 'TRUE' || row[key] === '1'))
+      .map(key => key.replace('TM_', ''))
+      .join(', ');
+
+    return `
+      <tr class="tc-row" data-tcid="${tcId}" data-module="${module}" data-impl="${implGroup}" data-automation="${automation}" data-methods="${testMethods}" style="border-bottom: 1px solid #2d2d2d;">
+        <td style="padding: 10px 12px;"><span onclick="openTestcaseFile('${tcId}')" style="color: #4fc3f7; cursor: pointer; text-decoration: underline;">${tcId}</span></td>
+        <td style="padding: 10px 12px; color: #cccccc;">${module}</td>
+        <td style="padding: 10px 12px; color: #cccccc;">${implGroup}</td>
+        <td style="padding: 10px 12px;"><span style="background: ${automation.toUpperCase().includes('Y') ? '#2e7d32' : '#616161'}; padding: 2px 8px; border-radius: 3px; font-size: 11px;">${automation}</span></td>
+        <td style="padding: 10px 12px; color: #858585; font-size: 12px;">${testMethods}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// 필터 이벤트 설정
+let currentFilteredRows = [];
+function setupFilterEvents(originalRows) {
+  currentFilteredRows = originalRows;
+
+  // 체크박스 변경 이벤트
+  document.querySelectorAll('.filter-options input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => applyFilters());
+  });
+
+  // 외부 클릭 시 드롭다운 닫기
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.filter-dropdown')) {
+      document.querySelectorAll('.filter-menu').forEach(m => m.style.display = 'none');
+    }
+  });
+}
+
+// 필터 적용
+function applyFilters() {
+  const tab = openTabs[activeTabIndex];
+  if (!tab || tab.type !== 'categoryViewer') return;
+
+  const rows = tab.excelData.rows;
+
+  // 선택된 필터 수집
+  const filters = {
+    automation: [...document.querySelectorAll('.filter-options[data-filter="automation"] input:checked')].map(cb => cb.value),
+    module: [...document.querySelectorAll('.filter-options[data-filter="module"] input:checked')].map(cb => cb.value),
+    implGroup: [...document.querySelectorAll('.filter-options[data-filter="implGroup"] input:checked')].map(cb => cb.value),
+    testMethod: [...document.querySelectorAll('.filter-options[data-filter="testMethod"] input:checked')].map(cb => cb.value)
+  };
+
+  // 필터링
+  const filteredRows = rows.filter(row => {
+    // Automation 필터
+    if (filters.automation.length > 0) {
+      const automation = (row['Automation'] || '').toUpperCase();
+      const matches = filters.automation.some(f => {
+        if (f === 'Y') return automation.includes('Y');
+        if (f === 'N') return !automation.includes('Y');
+        return true;
+      });
+      if (!matches) return false;
+    }
+
+    // Module 필터
+    if (filters.module.length > 0) {
+      const module = row['Module_Group'] || row['Module'] || '';
+      if (!filters.module.includes(module)) return false;
+    }
+
+    // Impl Group 필터
+    if (filters.implGroup.length > 0) {
+      const implGroup = row['Impl_Group'] || '';
+      if (!filters.implGroup.includes(implGroup)) return false;
+    }
+
+    // Test Method 필터
+    if (filters.testMethod.length > 0) {
+      const hasMethod = filters.testMethod.some(method => {
+        const key = `TM_${method}`;
+        return row[key] === 'Y' || row[key] === 'True' || row[key] === 'TRUE' || row[key] === '1';
+      });
+      if (!hasMethod) return false;
+    }
+
+    return true;
+  });
+
+  // 결과 업데이트
+  document.getElementById('filteredCount').textContent = filteredRows.length;
+  document.getElementById('tcListBody').innerHTML = renderTCRows(filteredRows);
+
+  // 활성 필터 표시
+  updateActiveFilters(filters);
+}
+
+// 활성 필터 표시
+function updateActiveFilters(filters) {
+  const container = document.getElementById('activeFilters');
+  if (!container) return;
+
+  const tags = [];
+
+  Object.entries(filters).forEach(([key, values]) => {
+    values.forEach(value => {
+      tags.push(`
+        <span style="background: #0e639c; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; display: flex; align-items: center; gap: 6px;">
+          ${key}: ${value}
+          <span onclick="removeFilter('${key}', '${value}')" style="cursor: pointer; opacity: 0.7;">×</span>
+        </span>
+      `);
+    });
+  });
+
+  container.innerHTML = tags.join('');
+}
+
+// 필터 제거
+function removeFilter(filterType, value) {
+  const selector = `.filter-options[data-filter="${filterType}"] input[value="${value}"]`;
+  const checkbox = document.querySelector(selector);
+  if (checkbox) {
+    checkbox.checked = false;
+    applyFilters();
+  }
+}
+
+// 이름 변경 (컨텍스트 메뉴에서 호출)
+function renameItem() {
+  // 값을 먼저 저장
+  const targetPath = contextMenuTargetPath;
+  const targetName = contextMenuTargetName;
+  const isFolder = contextMenuTargetIsFolder;
+
+  hideContextMenu();
+
+  if (!targetPath || !targetName) return;
+
+  startInlineRename(targetPath, targetName, isFolder);
+}
+
+// 인라인 이름 변경 시작 (파일/폴더 공용)
+function startInlineRename(itemPath, itemName, isFolder = false) {
+  // 해당 요소 찾기
+  let element;
+  if (isFolder) {
+    element = document.querySelector(`.tree-item.folder[data-path="${CSS.escape(itemPath)}"]`);
+  } else {
+    element = document.querySelector(`.tree-item.file[data-file="${CSS.escape(itemPath)}"]`);
+  }
+  if (!element) return;
+
+  const labelElement = element.querySelector('.tree-item-label');
+  if (!labelElement) return;
+
+  // 기존 라벨을 입력 필드로 교체
+  const originalText = labelElement.textContent;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = originalText;
+  input.className = 'inline-rename-input';
+  input.style.cssText = `
+    background: #3c3c3c;
+    border: 1px solid #007acc;
+    color: #cccccc;
+    font-size: 13px;
+    padding: 1px 4px;
+    outline: none;
+    width: 100%;
+    min-width: 50px;
+  `;
+
+  labelElement.style.display = 'none';
+  element.appendChild(input);
+  input.focus();
+
+  // 파일이면 확장자 앞까지 선택, 폴더는 전체 선택
+  if (!isFolder) {
+    const dotIndex = originalText.lastIndexOf('.');
+    if (dotIndex > 0) {
+      input.setSelectionRange(0, dotIndex);
+    } else {
+      input.select();
+    }
+  } else {
+    input.select();
+  }
+
+  // 이름 변경 완료 처리
+  const finishRename = async () => {
+    const newName = input.value.trim();
+    input.remove();
+    labelElement.style.display = '';
+
+    if (!newName || newName === originalText) return;
+
+    try {
+      const dirPath = itemPath.substring(0, itemPath.lastIndexOf('\\'));
+      const newPath = dirPath + '\\' + newName;
+
+      const result = await window.electronAPI.fs.rename(itemPath, newPath);
+
+      if (result.success) {
+        // 선택된 항목 정보 업데이트
+        if (selectedItemPath === itemPath) {
+          selectedItemPath = newPath;
+          selectedItemName = newName;
+        }
+
+        // 파일인 경우 열려있는 탭 업데이트
+        if (!isFolder) {
+          const tabIndex = openTabs.findIndex(tab => tab.filePath === itemPath);
+          if (tabIndex !== -1) {
+            openTabs[tabIndex].filePath = newPath;
+            openTabs[tabIndex].fileName = newName;
+            renderTabs();
+          }
+        }
+
+        // Explorer 새로고침
+        await refreshExplorer();
+      } else {
+        showToast('error', 'Failed to rename: ' + (result.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error renaming:', error);
+      showToast('error', 'Failed to rename');
+    }
+  };
+
+  // Enter로 완료
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      finishRename();
+    }
+    // ESC로 취소
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      input.remove();
+      labelElement.style.display = '';
+    }
+  });
+
+  // 포커스 잃으면 완료
+  input.addEventListener('blur', () => {
+    // 약간의 딜레이 후 처리 (다른 이벤트와 충돌 방지)
+    setTimeout(() => {
+      if (input.parentNode) {
+        finishRename();
+      }
+    }, 100);
+  });
+}
+
+// 삭제 확인 다이얼로그 표시
+let pendingDeleteItems = null;
+let pendingDeleteCallback = null;
+
+function showDeleteConfirmation(items, onConfirm) {
+  const overlay = document.getElementById('deleteConfirmOverlay');
+  const header = document.getElementById('deleteConfirmHeader');
+  const body = document.getElementById('deleteConfirmBody');
+  const confirmBtn = document.getElementById('deleteConfirmBtn');
+  const cancelBtn = document.getElementById('deleteCancelBtn');
+
+  // 메시지 구성
+  const hasFolders = items.some(item => item.isFolder);
+  const itemCount = items.length;
+
+  if (itemCount === 1) {
+    const item = items[0];
+    if (item.isFolder) {
+      header.textContent = 'Delete Folder';
+      body.innerHTML = `Are you sure you want to delete the folder <strong>"${item.name}"</strong> and all its contents?<br><br>This action cannot be undone.`;
+    } else {
+      header.textContent = 'Delete File';
+      body.innerHTML = `Are you sure you want to delete <strong>"${item.name}"</strong>?`;
+    }
+  } else {
+    header.textContent = 'Delete Multiple Items';
+    if (hasFolders) {
+      body.innerHTML = `Are you sure you want to delete <strong>${itemCount} items</strong> (including folders and their contents)?<br><br>This action cannot be undone.`;
+    } else {
+      body.innerHTML = `Are you sure you want to delete <strong>${itemCount} files</strong>?`;
+    }
+  }
+
+  pendingDeleteItems = items;
+  pendingDeleteCallback = onConfirm;
+
+  // 이벤트 리스너 (기존 것 제거 후 추가)
+  const newConfirmBtn = confirmBtn.cloneNode(true);
+  const newCancelBtn = cancelBtn.cloneNode(true);
+  confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+  cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+
+  newConfirmBtn.addEventListener('click', () => {
+    const callback = pendingDeleteCallback;
+    hideDeleteConfirmation();
+    if (callback) {
+      callback();
+    }
+  });
+
+  newCancelBtn.addEventListener('click', hideDeleteConfirmation);
+
+  overlay.classList.add('show');
+}
+
+function hideDeleteConfirmation() {
+  const overlay = document.getElementById('deleteConfirmOverlay');
+  overlay.classList.remove('show');
+  pendingDeleteItems = null;
+  pendingDeleteCallback = null;
+}
+
+// 선택된 아이템들 삭제 (다중 선택 지원)
+async function deleteSelectedItems(items) {
+  if (!items || items.length === 0) return;
+
+  const hasFolders = items.some(item => item.isFolder);
+
+  // 폴더가 포함된 경우 확인 다이얼로그 표시
+  if (hasFolders) {
+    showDeleteConfirmation(items, async () => {
+      await performDelete(items);
+    });
+  } else {
+    // 파일만 있는 경우 바로 삭제
+    await performDelete(items);
+  }
+}
+
+// 실제 삭제 수행
+async function performDelete(items) {
+  for (const item of items) {
+    await deleteItemByPath(item.path, item.isFolder);
+  }
+  // 다중 선택 초기화
+  clearMultiSelection();
+}
+
+// 삭제 (컨텍스트 메뉴에서 호출)
+async function deleteItem() {
+  // 값을 먼저 저장
+  const targetPath = contextMenuTargetPath;
+  const isFolder = contextMenuTargetIsFolder;
+  const targetName = contextMenuTargetName;
+
+  hideContextMenu();
+
+  if (!targetPath) return;
+
+  // 다중 선택된 아이템이 있으면 다중 삭제
+  const multiItems = getSelectedItems();
+  if (multiItems.length > 1) {
+    await deleteSelectedItems(multiItems);
+  } else {
+    // 단일 아이템 삭제
+    const item = { path: targetPath, name: targetName, isFolder };
+    if (isFolder) {
+      // 폴더는 확인 다이얼로그 표시
+      showDeleteConfirmation([item], async () => {
+        await deleteItemByPath(targetPath, isFolder);
+      });
+    } else {
+      await deleteItemByPath(targetPath, isFolder);
+    }
+  }
+}
+
+// 경로로 파일/폴더 삭제
+async function deleteItemByPath(itemPath, isFolder = false) {
+  try {
+    let result;
+    if (isFolder) {
+      result = await window.electronAPI.fs.deleteFolder(itemPath);
+    } else {
+      result = await window.electronAPI.fs.delete(itemPath);
+    }
+
+    if (result.success) {
+      // 선택 정보 초기화
+      if (selectedItemPath === itemPath) {
+        selectedItemPath = null;
+        selectedItemName = null;
+        selectedItemIsFolder = false;
+      }
+
+      // 파일인 경우 열려있는 탭 닫기
+      if (!isFolder) {
+        const tabIndex = openTabs.findIndex(tab => tab.filePath === itemPath);
+        if (tabIndex !== -1) {
+          openTabs.splice(tabIndex, 1);
+          if (activeTabIndex >= openTabs.length) {
+            activeTabIndex = openTabs.length - 1;
+          }
+          renderTabs();
+          if (activeTabIndex >= 0) {
+            renderActiveTabContent();
+          } else {
+            showWelcomeScreen();
+          }
+        }
+      } else {
+        // 폴더 삭제 시 해당 폴더 내 파일들의 탭도 닫기
+        const tabsToClose = openTabs.filter(tab => tab.filePath && tab.filePath.startsWith(itemPath + '\\'));
+        for (const tab of tabsToClose) {
+          const tabIndex = openTabs.indexOf(tab);
+          if (tabIndex !== -1) {
+            openTabs.splice(tabIndex, 1);
+          }
+        }
+        if (activeTabIndex >= openTabs.length) {
+          activeTabIndex = openTabs.length - 1;
+        }
+        renderTabs();
+        if (activeTabIndex >= 0) {
+          renderActiveTabContent();
+        } else {
+          showWelcomeScreen();
+        }
+      }
+
+      // Explorer 새로고침
+      await refreshExplorer();
+    } else {
+      const itemType = isFolder ? 'folder' : 'file';
+      showToast('error', `Failed to delete ${itemType}: ` + (result.error || 'Unknown error'));
+    }
+  } catch (error) {
+    console.error('Error deleting:', error);
+    showToast('error', 'Failed to delete');
+  }
 }
 
 // 파일 아이콘 가져오기
@@ -294,21 +1580,153 @@ function setupTreeInteraction() {
     const treeItem = event.target.closest('.tree-item');
     if (!treeItem) return;
 
+    // Refresh 버튼 클릭은 무시
+    if (event.target.closest('.explorer-refresh-btn')) return;
+
     const isFolder = treeItem.dataset.type === 'folder';
 
     if (isFolder) {
-      toggleFolder(treeItem);
+      toggleFolder(treeItem, event);
     } else {
-      selectFile(treeItem);
+      selectFile(treeItem, event);
+    }
+  });
+
+  // 더블클릭 이벤트 (엑셀 파일용)
+  explorer.addEventListener('dblclick', (event) => {
+    const treeItem = event.target.closest('.tree-item');
+    if (!treeItem) return;
+
+    const isFolder = treeItem.dataset.type === 'folder';
+    if (isFolder) return;
+
+    const filePath = treeItem.dataset.file;
+    if (filePath && isExcelFile(filePath)) {
+      openWithDefaultProgram(filePath);
     }
   });
 }
 
+// 엑셀 파일인지 확인
+function isExcelFile(filePath) {
+  const ext = filePath.toLowerCase();
+  return ext.endsWith('.xlsx') || ext.endsWith('.xls') || ext.endsWith('.xlsm');
+}
+
+// 기본 프로그램으로 파일 열기
+async function openWithDefaultProgram(filePath) {
+  try {
+    await window.electronAPI.shell.openPath(filePath);
+  } catch (error) {
+    console.error('Failed to open file:', error);
+    showToast('error', 'Failed to open file with default program');
+  }
+}
+
+// 다중 선택 초기화
+function clearMultiSelection() {
+  multiSelectedItems.clear();
+  document.querySelectorAll('.tree-item.multi-selected').forEach(item => {
+    item.classList.remove('multi-selected');
+  });
+}
+
+// 다중 선택에 아이템 추가/제거
+function toggleMultiSelectItem(element, path, name, isFolder) {
+  const itemKey = path;
+  const existingItem = [...multiSelectedItems].find(item => item.path === path);
+
+  if (existingItem) {
+    multiSelectedItems.delete(existingItem);
+    element.classList.remove('multi-selected');
+  } else {
+    multiSelectedItems.add({ path, name, isFolder, element });
+    element.classList.add('multi-selected');
+  }
+}
+
+// 범위 선택 (Shift)
+function rangeSelectItems(fromPath, toPath) {
+  const allItems = document.querySelectorAll('.tree-item.file, .tree-item.folder:not(.root)');
+  let inRange = false;
+  let foundStart = false;
+  let foundEnd = false;
+
+  allItems.forEach(item => {
+    const itemPath = item.dataset.file || item.dataset.path;
+    if (!itemPath) return;
+
+    if (itemPath === fromPath || itemPath === toPath) {
+      if (!foundStart) {
+        foundStart = true;
+        inRange = true;
+      } else {
+        foundEnd = true;
+      }
+    }
+
+    if (inRange) {
+      const name = item.querySelector('.tree-item-label')?.textContent || '';
+      const isFolder = item.dataset.type === 'folder';
+      const existingItem = [...multiSelectedItems].find(i => i.path === itemPath);
+      if (!existingItem) {
+        multiSelectedItems.add({ path: itemPath, name, isFolder, element: item });
+        item.classList.add('multi-selected');
+      }
+    }
+
+    if (foundEnd) {
+      inRange = false;
+    }
+  });
+}
+
+// 현재 선택된 아이템들 가져오기 (단일 선택 포함)
+function getSelectedItems() {
+  if (multiSelectedItems.size > 0) {
+    return [...multiSelectedItems];
+  } else if (selectedItemPath) {
+    return [{ path: selectedItemPath, name: selectedItemName, isFolder: selectedItemIsFolder }];
+  }
+  return [];
+}
+
 // 폴더 토글 (확장/축소)
-function toggleFolder(folderElement) {
+function toggleFolder(folderElement, event = null) {
   const folderName = folderElement.dataset.name;
+  const folderPath = folderElement.dataset.path;
   const childrenContainer = document.getElementById(`${folderName}-children`);
   const chevron = folderElement.querySelector('.chevron');
+  const itemName = folderElement.querySelector('.tree-item-label')?.textContent || folderName;
+
+  // 폴더 선택 상태 저장 (Delete/F2 키용) - 루트 폴더 제외
+  if (folderPath && !folderElement.classList.contains('root')) {
+    const ctrlKey = event?.ctrlKey || event?.metaKey;
+    const shiftKey = event?.shiftKey;
+
+    if (ctrlKey) {
+      // Ctrl+클릭: 다중 선택 토글
+      toggleMultiSelectItem(folderElement, folderPath, itemName, true);
+    } else if (shiftKey && lastClickedItemPath) {
+      // Shift+클릭: 범위 선택
+      rangeSelectItems(lastClickedItemPath, folderPath);
+    } else {
+      // 일반 클릭: 단일 선택
+      clearMultiSelection();
+      document.querySelectorAll('.tree-item.file').forEach(item => {
+        item.classList.remove('selected');
+      });
+      document.querySelectorAll('.tree-item.folder').forEach(item => {
+        item.classList.remove('selected');
+      });
+      folderElement.classList.add('selected');
+      selectedItemPath = folderPath;
+      selectedItemName = itemName;
+      selectedItemIsFolder = true;
+    }
+
+    lastClickedItemPath = folderPath;
+  }
 
   if (!childrenContainer) return;
 
@@ -328,17 +1746,40 @@ function toggleFolder(folderElement) {
 }
 
 // 파일 선택
-function selectFile(fileElement) {
-  // 모든 파일 선택 해제
-  document.querySelectorAll('.tree-item.file').forEach(item => {
-    item.classList.remove('selected');
-  });
+function selectFile(fileElement, event = null) {
+  const filePath = fileElement.dataset.file;
+  const fileName = window.electronAPI.fs.path.basename(filePath);
+  const ctrlKey = event?.ctrlKey || event?.metaKey;
+  const shiftKey = event?.shiftKey;
 
-  // 현재 파일 선택
-  fileElement.classList.add('selected');
+  if (ctrlKey) {
+    // Ctrl+클릭: 다중 선택 토글
+    toggleMultiSelectItem(fileElement, filePath, fileName, false);
+  } else if (shiftKey && lastClickedItemPath) {
+    // Shift+클릭: 범위 선택
+    rangeSelectItems(lastClickedItemPath, filePath);
+  } else {
+    // 일반 클릭: 단일 선택
+    clearMultiSelection();
+    document.querySelectorAll('.tree-item.file').forEach(item => {
+      item.classList.remove('selected');
+    });
+    document.querySelectorAll('.tree-item.folder').forEach(item => {
+      item.classList.remove('selected');
+    });
 
-  const fileName = fileElement.dataset.file;
-  openFileInEditor(fileName);
+    fileElement.classList.add('selected');
+    selectedItemPath = filePath;
+    selectedItemName = fileName;
+    selectedItemIsFolder = false;
+
+    // 파일 열기 (Ctrl/Shift 없이 클릭할 때만, 엑셀 파일 제외)
+    if (!isExcelFile(filePath)) {
+      openFileInEditor(filePath);
+    }
+  }
+
+  lastClickedItemPath = filePath;
 }
 
 // 에디터에 파일 열기
@@ -376,6 +1817,13 @@ async function openFileInEditor(filePath) {
   });
 
   activeTabIndex = openTabs.length - 1;
+
+  // 파일 감시 시작
+  window.electronAPI.fileWatch.start(filePath).then(result => {
+    if (result.success) {
+      console.log('Started watching file:', filePath);
+    }
+  });
 
   // UI 업데이트
   renderTabs();
@@ -467,6 +1915,64 @@ function renderTabs() {
       }, 0);
     }
   });
+
+  // Chat 첨부 파일 목록 업데이트
+  updateChatAttachments();
+}
+
+// Chat 첨부 파일 목록 업데이트 (열린 탭 파일들)
+function updateChatAttachments() {
+  const container = document.getElementById('chatAttachments');
+  if (!container) return;
+
+  // 실제 파일만 필터링 (testcase-sync, configuration 등 제외)
+  const fileTabs = openTabs.filter(tab =>
+    tab.filePath && !tab.filePath.startsWith('__') && tab.type !== 'categorize' && tab.type !== 'categoryViewer'
+  );
+
+  if (fileTabs.length === 0) {
+    container.innerHTML = '<span style="color: #6e6e6e; font-size: 11px;">No files open</span>';
+    return;
+  }
+
+  container.innerHTML = fileTabs.map((tab, idx) => {
+    const originalIndex = openTabs.indexOf(tab);
+    const isChecked = tab.chatAttached ? 'checked' : '';
+    const checkedClass = tab.chatAttached ? 'checked' : '';
+    return `
+      <label class="chat-attachment-item ${checkedClass}" data-tab-index="${originalIndex}">
+        <input type="checkbox" ${isChecked} onchange="toggleChatAttachment(${originalIndex}, this)">
+        <i class="codicon codicon-file file-icon"></i>
+        <span>${tab.fileName}</span>
+      </label>
+    `;
+  }).join('');
+}
+
+// 첨부 파일 토글
+function toggleChatAttachment(tabIndex, checkbox) {
+  if (tabIndex >= 0 && tabIndex < openTabs.length) {
+    openTabs[tabIndex].chatAttached = checkbox.checked;
+    // 스타일 업데이트
+    const label = checkbox.closest('.chat-attachment-item');
+    if (label) {
+      label.classList.toggle('checked', checkbox.checked);
+    }
+  }
+}
+
+// 첨부된 파일 내용 가져오기
+function getAttachedFilesContent() {
+  const attachedFiles = openTabs.filter(tab => tab.chatAttached && tab.content);
+  if (attachedFiles.length === 0) return '';
+
+  let content = '[Attached Files]\n';
+  attachedFiles.forEach(tab => {
+    content += `\n--- ${tab.fileName} ---\n`;
+    content += tab.content;
+    content += `\n--- End of ${tab.fileName} ---\n`;
+  });
+  return content + '\n';
 }
 
 // 탭 전환
@@ -513,6 +2019,16 @@ function closeTab(index) {
 function performCloseTab(index) {
   if (index < 0 || index >= openTabs.length) return;
 
+  // 파일 감시 중지 (실제 파일인 경우에만)
+  const tab = openTabs[index];
+  if (tab.filePath && !tab.filePath.startsWith('__')) {
+    window.electronAPI.fileWatch.stop(tab.filePath).then(result => {
+      if (result.success) {
+        console.log('Stopped watching file:', tab.filePath);
+      }
+    });
+  }
+
   openTabs.splice(index, 1);
 
   // 활성 탭 조정
@@ -551,6 +2067,12 @@ function renderActiveTabContent() {
     openCanvasEditorForTab(tab);
   } else if (tab.type === 'testcase-sync') {
     renderTestcaseSync();
+  } else if (tab.type === 'configuration') {
+    renderConfiguration();
+  } else if (tab.type === 'categorize') {
+    renderCategorize(tab.folderPath, tab.folderName);
+  } else if (tab.type === 'categoryViewer') {
+    renderCategoryViewer(tab);
   } else {
     // Monaco 에디터로 텍스트 파일 편집
     editorArea.innerHTML = '<div id="monaco-container" style="width: 100%; height: 100%;"></div>';
@@ -579,6 +2101,7 @@ function renderActiveTabContent() {
       renderWhitespace: 'selection',
       cursorBlinking: 'smooth',
       smoothScrolling: true,
+      mouseWheelZoom: true,  // Ctrl+휠로 글자 크기 조정
     });
 
     // 내용 변경 이벤트
@@ -668,6 +2191,16 @@ async function openFolder() {
   if (folderPath) {
     await loadProjectFiles(folderPath);
 
+    // 기존 Chat 히스토리 파일들 삭제 (잔재 정리)
+    try {
+      await window.electronAPI.fs.delete(folderPath + '/.vvu.prompt.history.md');
+      console.log('Deleted old .vvu.prompt.history.md');
+    } catch (error) { /* 파일이 없으면 무시 */ }
+    try {
+      await window.electronAPI.fs.delete(folderPath + '/.vvu.prompt.last.md');
+      console.log('Deleted old .vvu.prompt.last.md');
+    } catch (error) { /* 파일이 없으면 무시 */ }
+
     // 폴더 열림 상태로 설정
     folderOpened = true;
 
@@ -685,25 +2218,86 @@ async function openFolder() {
       explorerItem.classList.add('active');
       currentActiveView = 'explorer';
     }
+
+    // Configuration 메뉴 활성화
+    enableConfigurationMenu();
   }
 }
 
-// Project 메뉴 토글
-function toggleProjectMenu(event) {
+// Configuration 메뉴 활성화
+function enableConfigurationMenu() {
+  const configMenuItem = document.getElementById('configMenuItem');
+  if (configMenuItem) {
+    configMenuItem.style.color = '#cccccc';
+    configMenuItem.style.pointerEvents = 'auto';
+  }
+}
+
+// Configuration 메뉴 비활성화
+function disableConfigurationMenu() {
+  const configMenuItem = document.getElementById('configMenuItem');
+  if (configMenuItem) {
+    configMenuItem.style.color = '#6e6e6e';
+    configMenuItem.style.pointerEvents = 'none';
+  }
+}
+
+// 메뉴에서 폴더 열기
+function openFolderFromMenu(event) {
+  if (event) event.stopPropagation();
+  closeAllMenus();
+  openFolder();
+}
+
+// 메뉴 상태 관리
+let menuOpen = false;
+let activeMenuId = null;
+
+// 모든 드롭다운 메뉴 닫기
+function closeAllMenus() {
+  document.querySelectorAll('.dropdown-menu').forEach(menu => {
+    menu.classList.remove('show');
+  });
+  menuOpen = false;
+  activeMenuId = null;
+}
+
+// 특정 메뉴 열기
+function openMenu(menuId) {
+  closeAllMenus();
+  const dropdown = document.getElementById(menuId + 'Dropdown');
+  if (dropdown) {
+    dropdown.classList.add('show');
+    menuOpen = true;
+    activeMenuId = menuId;
+  }
+}
+
+// 메뉴 토글 (클릭)
+function toggleMenu(menuId, event) {
   event.stopPropagation();
-  const dropdown = document.getElementById('projectDropdown');
-  dropdown.classList.toggle('show');
 
-  // 다른 곳 클릭하면 닫기
-  const closeDropdown = (e) => {
-    if (!e.target.closest('#projectMenu')) {
-      dropdown.classList.remove('show');
-      document.removeEventListener('click', closeDropdown);
-    }
-  };
+  if (activeMenuId === menuId && menuOpen) {
+    closeAllMenus();
+  } else {
+    openMenu(menuId);
 
-  if (dropdown.classList.contains('show')) {
-    setTimeout(() => document.addEventListener('click', closeDropdown), 0);
+    // 다른 곳 클릭하면 닫기
+    const closeOnClick = (e) => {
+      if (!e.target.closest('.menu-with-dropdown')) {
+        closeAllMenus();
+        document.removeEventListener('click', closeOnClick);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', closeOnClick), 0);
+  }
+}
+
+// 메뉴 호버 (마우스 이동)
+function hoverMenu(menuId, event) {
+  // 다른 메뉴가 열려있을 때만 호버로 전환
+  if (menuOpen && activeMenuId !== menuId) {
+    openMenu(menuId);
   }
 }
 
@@ -712,8 +2306,7 @@ function openTestcaseSync(event) {
   if (event) event.stopPropagation();
 
   // 드롭다운 닫기
-  const dropdown = document.getElementById('projectDropdown');
-  if (dropdown) dropdown.classList.remove('show');
+  closeAllMenus();
 
   // 이미 열려있는지 확인
   const existingTabIndex = openTabs.findIndex(tab => tab.filePath === '__testcase_sync__');
@@ -736,50 +2329,702 @@ function openTestcaseSync(event) {
   renderTestcaseSync();
 }
 
-// Testcase Sync 화면 렌더링
-function renderTestcaseSync() {
-  const editorArea = document.querySelector('.editor-area');
-  editorArea.innerHTML = `
-    <div class="testcase-sync" style="padding: 40px 60px; font-family: 'Segoe UI', sans-serif;">
-      <h1 style="font-size: 28px; font-weight: 600; margin-bottom: 16px; color: #cccccc;">Testcase Sync</h1>
-      <p style="font-size: 14px; color: #858585; margin-bottom: 40px;">Load your testcases to get started.</p>
+// Categorize 진행 상태
+let categorizeRunning = false;
+let categorizeFolderPath = null;
+let categorizeProcessId = null;
 
-      <div style="display: flex; flex-direction: column; gap: 16px; max-width: 400px;">
-        <div class="wizard-option" onclick="loadFromCodebeamer()" style="display: flex; align-items: center; gap: 16px; padding: 16px 20px; background: #2d2d2d; border: 1px solid #454545; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
-          <div style="width: 40px; height: 40px; background: #0e639c; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
-            <i class="codicon codicon-cloud-download" style="font-size: 20px; color: white;"></i>
+// Categorize 화면 렌더링
+function renderCategorize(folderPath, folderName) {
+  const editorArea = document.querySelector('.editor-area');
+  categorizeFolderPath = folderPath;
+
+  editorArea.innerHTML = `
+    <div class="categorize-view" style="padding: 40px 60px; font-family: 'Segoe UI', sans-serif; max-width: 600px;">
+      <h1 style="font-size: 28px; font-weight: 600; margin-bottom: 8px; color: #cccccc;">Categorize</h1>
+      <p style="font-size: 14px; color: #858585; margin-bottom: 32px;">Categorize testcases in <strong style="color: #cccccc;">${escapeHtml(folderName)}</strong></p>
+
+      <!-- 옵션 선택 -->
+      <div class="categorize-section" style="margin-bottom: 32px;">
+        <h2 style="font-size: 14px; font-weight: 600; color: #cccccc; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px;">
+          <i class="codicon codicon-settings" style="margin-right: 8px; color: #007acc;"></i>
+          Options
+        </h2>
+        <div style="background: #2d2d2d; border-radius: 4px; padding: 16px; border: 1px solid #454545;">
+          <label class="categorize-option" style="display: flex; align-items: center; padding: 10px 0; cursor: pointer; border-bottom: 1px solid #3c3c3c;">
+            <input type="checkbox" id="catOptAutomation" style="width: 18px; height: 18px; margin-right: 12px; accent-color: #007acc;">
+            <div>
+              <div style="font-size: 14px; color: #cccccc;">Automation Status</div>
+              <div style="font-size: 12px; color: #858585; margin-top: 2px;">Categorize by automation status (Automated, Manual, Not Automatable)</div>
+            </div>
+          </label>
+          <label class="categorize-option" style="display: flex; align-items: center; padding: 10px 0; cursor: pointer; border-bottom: 1px solid #3c3c3c;">
+            <input type="checkbox" id="catOptModule" style="width: 18px; height: 18px; margin-right: 12px; accent-color: #007acc;">
+            <div>
+              <div style="font-size: 14px; color: #cccccc;">Module Classification</div>
+              <div style="font-size: 12px; color: #858585; margin-top: 2px;">Categorize by module or component</div>
+            </div>
+          </label>
+          <label class="categorize-option" style="display: flex; align-items: center; padding: 10px 0; cursor: pointer; border-bottom: 1px solid #3c3c3c;">
+            <input type="checkbox" id="catOptTestMethod" style="width: 18px; height: 18px; margin-right: 12px; accent-color: #007acc;">
+            <div>
+              <div style="font-size: 14px; color: #cccccc;">Test Method</div>
+              <div style="font-size: 12px; color: #858585; margin-top: 2px;">Categorize by test method (Unit, Integration, System, etc.)</div>
+            </div>
+          </label>
+          <label class="categorize-option" style="display: flex; align-items: center; padding: 10px 0; cursor: pointer;">
+            <input type="checkbox" id="catOptImplType" style="width: 18px; height: 18px; margin-right: 12px; accent-color: #007acc;">
+            <div>
+              <div style="font-size: 14px; color: #cccccc;">Implementation Type</div>
+              <div style="font-size: 12px; color: #858585; margin-top: 2px;">Categorize by implementation type (Positive, Negative, Boundary, etc.)</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- 진행 상태 -->
+      <div class="categorize-section" style="margin-bottom: 32px;">
+        <h2 style="font-size: 14px; font-weight: 600; color: #cccccc; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px;">
+          <i class="codicon codicon-sync" style="margin-right: 8px; color: #007acc;"></i>
+          Progress
+        </h2>
+        <div style="background: #2d2d2d; border-radius: 4px; padding: 16px; border: 1px solid #454545;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span id="catProgressText" style="font-size: 13px; color: #cccccc;">Ready to start</span>
+            <span id="catProgressPercent" style="font-size: 13px; color: #858585;">0%</span>
           </div>
-          <div>
-            <div style="font-size: 14px; font-weight: 500; color: #cccccc; margin-bottom: 4px;">Load from Codebeamer</div>
-            <div style="font-size: 12px; color: #858585;">Connect to Codebeamer and import testcases</div>
+          <div style="background: #1e1e1e; border-radius: 4px; height: 8px; overflow: hidden;">
+            <div id="catProgressBar" style="background: #007acc; height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+          </div>
+          <div id="catCurrentFile" style="margin-top: 12px; font-size: 12px; color: #858585; min-height: 18px;"></div>
+        </div>
+      </div>
+
+      <!-- 시작 버튼 -->
+      <div style="display: flex; gap: 12px;">
+        <button id="catStartBtn" onclick="startCategorize()" style="padding: 12px 32px; background: #0e639c; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+          <i class="codicon codicon-play"></i>
+          Start
+        </button>
+        <button id="catStopBtn" onclick="stopCategorize()" style="padding: 12px 24px; background: #5a5a5a; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 14px; display: none; align-items: center; gap: 8px;">
+          <i class="codicon codicon-debug-stop"></i>
+          Stop
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+// Categorize 진행률 업데이트
+function updateCategorizeProgress(percent, text) {
+  const progressBar = document.getElementById('catProgressBar');
+  const progressText = document.getElementById('catProgressText');
+  const progressPercent = document.getElementById('catProgressPercent');
+
+  if (progressBar) progressBar.style.width = percent + '%';
+  if (progressText) progressText.textContent = text;
+  if (progressPercent) progressPercent.textContent = percent + '%';
+}
+
+// Categorize 시작
+async function startCategorize() {
+  const options = {
+    automation: document.getElementById('catOptAutomation')?.checked,
+    module: document.getElementById('catOptModule')?.checked,
+    testMethod: document.getElementById('catOptTestMethod')?.checked,
+    implType: document.getElementById('catOptImplType')?.checked
+  };
+
+  if (!options.automation && !options.module && !options.testMethod && !options.implType) {
+    showToast('warning', 'Please select at least one option.');
+    return;
+  }
+
+  if (!categorizeFolderPath) {
+    showToast('error', 'No folder selected for categorization.');
+    return;
+  }
+
+  categorizeRunning = true;
+
+  const startBtn = document.getElementById('catStartBtn');
+  const stopBtn = document.getElementById('catStopBtn');
+  const currentFileEl = document.getElementById('catCurrentFile');
+  if (startBtn) startBtn.style.display = 'none';
+  if (stopBtn) stopBtn.style.display = 'flex';
+
+  updateCategorizeProgress(0, 'Starting...');
+  appendOutput('=== Categorizer Started ===', 'info');
+  appendOutput(`Target folder: ${categorizeFolderPath}`, 'info');
+
+  try {
+    // Python 스크립트 경로
+    const projectRoot = await window.electronAPI.getProjectRoot();
+    const scriptPath = projectRoot + '/scripts/categorizer.py';
+    const optionsJson = JSON.stringify(options);
+
+    appendOutput(`Options: ${optionsJson}`, 'info');
+
+    // Python 스크립트 실행 (스트리밍 모드)
+    const result = await window.electronAPI.python.runStreaming(scriptPath, [categorizeFolderPath, optionsJson]);
+    categorizeProcessId = result.processId;
+
+    // 출력 핸들러 설정
+    window.electronAPI.python.onOutput((data) => {
+      if (data.processId !== categorizeProcessId) return;
+
+      const lines = data.data.split('\n');
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
+
+        // OUTPUT에 로그 출력
+        if (data.isError) {
+          appendOutput(trimmedLine, 'error');
+        } else if (trimmedLine.startsWith('PROGRESS:')) {
+          const progress = trimmedLine.substring(9);
+          const [current, total] = progress.split('/').map(Number);
+          const percent = Math.round((current / total) * 100);
+          updateCategorizeProgress(percent, `Processing ${current}/${total}`);
+          if (currentFileEl) currentFileEl.textContent = `Analyzing testcase ${current} of ${total}...`;
+        } else if (trimmedLine.startsWith('COMPLETE:')) {
+          const outputPath = trimmedLine.substring(9);
+          updateCategorizeProgress(100, 'Completed!');
+          if (currentFileEl) currentFileEl.textContent = `Output: ${outputPath}`;
+          appendOutput(`Excel file created: ${outputPath}`, 'success');
+          showToast('success', 'Categorization completed! Excel file created.');
+          // Explorer 새로고침
+          refreshExplorer();
+        } else if (trimmedLine.startsWith('Found ')) {
+          if (currentFileEl) currentFileEl.textContent = trimmedLine;
+          appendOutput(trimmedLine, 'info');
+        } else {
+          // 기타 출력
+          appendOutput(trimmedLine, 'info');
+        }
+      }
+    });
+
+    // 종료 핸들러
+    window.electronAPI.python.onExit((data) => {
+      if (data.processId !== categorizeProcessId) return;
+
+      categorizeRunning = false;
+      categorizeProcessId = null;
+
+      if (startBtn) startBtn.style.display = 'flex';
+      if (stopBtn) stopBtn.style.display = 'none';
+
+      if (data.code !== 0 && data.error) {
+        showToast('error', 'Categorization failed: ' + data.error);
+        updateCategorizeProgress(0, 'Failed');
+        appendOutput(`Categorization failed: ${data.error}`, 'error');
+      } else if (data.code === 0) {
+        appendOutput('=== Categorizer Finished ===', 'success');
+      }
+    });
+
+  } catch (error) {
+    console.error('Error starting categorizer:', error);
+    showToast('error', 'Failed to start categorization: ' + error.message);
+    appendOutput(`Error: ${error.message}`, 'error');
+    categorizeRunning = false;
+    if (startBtn) startBtn.style.display = 'flex';
+    if (stopBtn) stopBtn.style.display = 'none';
+  }
+}
+
+// Categorize 중지
+async function stopCategorize() {
+  if (categorizeProcessId) {
+    await window.electronAPI.python.kill(categorizeProcessId);
+    categorizeProcessId = null;
+  }
+
+  categorizeRunning = false;
+  updateCategorizeProgress(0, 'Stopped');
+
+  const startBtn = document.getElementById('catStartBtn');
+  const stopBtn = document.getElementById('catStopBtn');
+  const currentFileEl = document.getElementById('catCurrentFile');
+  if (startBtn) startBtn.style.display = 'flex';
+  if (stopBtn) stopBtn.style.display = 'none';
+  if (currentFileEl) currentFileEl.textContent = '';
+}
+
+// Testcase Sync 진행 상태
+let tcSyncRunning = false;
+let currentPythonProcessId = null;
+
+// Testcase Sync 화면 렌더링
+async function renderTestcaseSync() {
+  const editorArea = document.querySelector('.editor-area');
+
+  // 설정에서 Excel 경로 불러오기
+  const config = await loadConfiguration();
+  const excelPath = config.excel?.syncPath || '';
+
+  editorArea.innerHTML = `
+    <div class="testcase-sync" style="padding: 40px 60px; font-family: 'Segoe UI', sans-serif; max-width: 600px;">
+      <h1 style="font-size: 28px; font-weight: 600; margin-bottom: 8px; color: #cccccc;">Testcase Sync</h1>
+      <p style="font-size: 14px; color: #858585; margin-bottom: 32px;">Import testcases from Excel and generate TC files.</p>
+
+      <!-- Excel 파일 선택 -->
+      <div class="tc-section" style="margin-bottom: 32px;">
+        <h2 style="font-size: 14px; font-weight: 600; color: #cccccc; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px;">
+          <i class="codicon codicon-file" style="margin-right: 8px; color: #217346;"></i>
+          Excel Source
+        </h2>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input type="text" id="tcExcelPath" value="${escapeHtml(excelPath)}" readonly
+                 placeholder="Select an Excel file..."
+                 style="flex: 1; padding: 10px 14px; background: #3c3c3c; border: 1px solid #5a5a5a; border-radius: 4px; color: #cccccc; font-size: 13px; outline: none;">
+          <button onclick="selectTcExcelFile()" style="padding: 10px 20px; background: #0e639c; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 13px; white-space: nowrap;">
+            <i class="codicon codicon-folder-opened" style="margin-right: 6px;"></i>Browse
+          </button>
+        </div>
+      </div>
+
+      <!-- 진행 상태 -->
+      <div class="tc-section" style="margin-bottom: 32px;">
+        <h2 style="font-size: 14px; font-weight: 600; color: #cccccc; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px;">
+          <i class="codicon codicon-sync" style="margin-right: 8px; color: #007acc;"></i>
+          Progress
+        </h2>
+        <div style="background: #2d2d2d; border-radius: 4px; padding: 16px; border: 1px solid #454545;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span id="tcProgressText" style="font-size: 13px; color: #cccccc;">Ready to start</span>
+            <span id="tcProgressPercent" style="font-size: 13px; color: #858585;">0%</span>
+          </div>
+          <div style="background: #1e1e1e; border-radius: 4px; height: 8px; overflow: hidden;">
+            <div id="tcProgressBar" style="background: #007acc; height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+          </div>
+          <div id="tcCurrentFile" style="margin-top: 12px; font-size: 12px; color: #858585; min-height: 18px;"></div>
+        </div>
+      </div>
+
+      <!-- 시작 버튼 -->
+      <div style="display: flex; gap: 12px;">
+        <button id="tcStartBtn" onclick="startTcSync()" style="padding: 12px 32px; background: #217346; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+          <i class="codicon codicon-play"></i>
+          Start Sync
+        </button>
+        <button id="tcStopBtn" onclick="stopTcSync()" style="padding: 12px 24px; background: #5a5a5a; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 14px; display: none; align-items: center; gap: 8px;">
+          <i class="codicon codicon-debug-stop"></i>
+          Stop
+        </button>
+      </div>
+    </div>
+  `;
+
+  // 입력 필드 포커스 스타일
+  const input = document.getElementById('tcExcelPath');
+  if (input) {
+    input.addEventListener('focus', () => input.style.borderColor = '#007acc');
+    input.addEventListener('blur', () => input.style.borderColor = '#5a5a5a');
+  }
+}
+
+// TC Sync용 Excel 파일 선택
+async function selectTcExcelFile() {
+  try {
+    const filePath = await window.electronAPI.dialog.openFile({
+      filters: [{ name: 'Excel Files', extensions: ['xlsx', 'xls'] }]
+    });
+
+    if (filePath) {
+      // UI 업데이트
+      const inputEl = document.getElementById('tcExcelPath');
+      if (inputEl) {
+        inputEl.value = filePath;
+      }
+
+      // 설정에 저장
+      await saveTcExcelPath(filePath);
+    }
+  } catch (error) {
+    console.error('Error selecting Excel file:', error);
+  }
+}
+
+// TC Excel 경로를 설정에 저장
+async function saveTcExcelPath(filePath) {
+  if (!currentProjectPath) return;
+
+  try {
+    const config = await loadConfiguration();
+    if (!config.excel) config.excel = {};
+    config.excel.syncPath = filePath;
+
+    const configPath = currentProjectPath + '\\.vvu.config';
+    await window.electronAPI.fs.writeFile(configPath, JSON.stringify(config, null, 2));
+  } catch (error) {
+    console.error('Error saving TC Excel path:', error);
+  }
+}
+
+// TC Sync 시작 (스트리밍 모드)
+async function startTcSync() {
+  const excelPath = document.getElementById('tcExcelPath')?.value;
+
+  if (!excelPath) {
+    showToast('error', 'Please select an Excel file first.');
+    return;
+  }
+
+  if (!currentProjectPath) {
+    showToast('error', 'Please open a folder first.');
+    return;
+  }
+
+  tcSyncRunning = true;
+
+  // UI 상태 변경
+  const startBtn = document.getElementById('tcStartBtn');
+  const stopBtn = document.getElementById('tcStopBtn');
+  if (startBtn) startBtn.style.display = 'none';
+  if (stopBtn) stopBtn.style.display = 'flex';
+
+  updateTcProgress(0, 'Starting...');
+
+  // Output 패널 열기
+  if (!outputPanelVisible) {
+    const panel = document.getElementById('bottomPanel');
+    const checkmark = document.getElementById('outputCheckmark');
+    panel.classList.add('show');
+    if (checkmark) checkmark.textContent = '✓';
+    outputPanelVisible = true;
+  }
+  switchBottomTab('output');
+
+  // Python 스크립트 실행 (스트리밍 모드)
+  appendOutput('Starting TC Sync...', 'info');
+  appendOutput(`Excel: ${excelPath}`, 'info');
+  appendOutput(`Output: ${currentProjectPath}\\testcase`, 'info');
+
+  try {
+    // 스트리밍 모드로 Python 실행
+    const result = await window.electronAPI.python.runStreaming('scripts/tc_generator.py', [excelPath, currentProjectPath]);
+    currentPythonProcessId = result.processId;
+    // 이후 처리는 이벤트 리스너에서 수행 (handlePythonOutput, handlePythonExit)
+  } catch (error) {
+    console.error('TC Sync error:', error);
+    appendOutput(`Error: ${error.message}`, 'error');
+    updateTcProgress(0, 'Error');
+
+    tcSyncRunning = false;
+    currentPythonProcessId = null;
+
+    // UI 상태 복원
+    if (startBtn) startBtn.style.display = 'flex';
+    if (stopBtn) stopBtn.style.display = 'none';
+  }
+}
+
+// TC Sync 중지
+async function stopTcSync() {
+  if (currentPythonProcessId) {
+    await window.electronAPI.python.kill(currentPythonProcessId);
+    appendOutput('TC Sync stopped by user.', 'warning');
+  }
+
+  tcSyncRunning = false;
+  currentPythonProcessId = null;
+  updateTcProgress(0, 'Stopped');
+
+  const startBtn = document.getElementById('tcStartBtn');
+  const stopBtn = document.getElementById('tcStopBtn');
+  if (startBtn) startBtn.style.display = 'flex';
+  if (stopBtn) stopBtn.style.display = 'none';
+}
+
+// TC 진행률 업데이트
+function updateTcProgress(percent, text) {
+  const progressBar = document.getElementById('tcProgressBar');
+  const progressText = document.getElementById('tcProgressText');
+  const progressPercent = document.getElementById('tcProgressPercent');
+
+  if (progressBar) progressBar.style.width = percent + '%';
+  if (progressText) progressText.textContent = text;
+  if (progressPercent) progressPercent.textContent = percent + '%';
+}
+
+// TC 현재 파일 표시
+function updateTcCurrentFile(fileName) {
+  const el = document.getElementById('tcCurrentFile');
+  if (el) el.textContent = `Creating: ${fileName}`;
+}
+
+// Explorer에서 파일 하이라이트
+async function highlightFileInExplorer(filePath) {
+  // testcase 폴더 확장
+  const testcaseFolder = document.querySelector('.tree-item.folder[data-name="testcase"]');
+  if (testcaseFolder) {
+    const childrenContainer = document.getElementById('testcase-children');
+    if (childrenContainer && !childrenContainer.classList.contains('expanded')) {
+      childrenContainer.classList.add('expanded');
+      const chevron = testcaseFolder.querySelector('.chevron');
+      if (chevron) chevron.classList.add('expanded');
+    }
+  }
+
+  // 파일 선택
+  const fileElement = document.querySelector(`.tree-item.file[data-file="${CSS.escape(filePath)}"]`);
+  if (fileElement) {
+    // 기존 선택 해제
+    document.querySelectorAll('.tree-item.file').forEach(item => {
+      item.classList.remove('selected');
+    });
+
+    // 새 파일 선택
+    fileElement.classList.add('selected');
+    selectedItemPath = filePath;
+    selectedItemName = window.electronAPI.fs.path.basename(filePath);
+    selectedItemIsFolder = false;
+
+    // 스크롤하여 보이게
+    fileElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+// Configuration 열기
+function openConfiguration(event) {
+  if (event) event.stopPropagation();
+
+  // 드롭다운 닫기
+  closeAllMenus();
+
+  // 폴더가 열려있지 않으면 리턴
+  if (!folderOpened || !currentProjectPath) {
+    return;
+  }
+
+  // 이미 열려있는지 확인
+  const existingTabIndex = openTabs.findIndex(tab => tab.filePath === '__configuration__');
+  if (existingTabIndex !== -1) {
+    switchToTab(existingTabIndex);
+    return;
+  }
+
+  // 새 탭 추가
+  openTabs.push({
+    filePath: '__configuration__',
+    fileName: 'Configuration',
+    type: 'configuration',
+    content: null,
+    originalContent: null
+  });
+
+  activeTabIndex = openTabs.length - 1;
+  renderTabs();
+  renderConfiguration();
+}
+
+// Configuration 화면 렌더링
+async function renderConfiguration() {
+  const editorArea = document.querySelector('.editor-area');
+
+  // 기존 설정 불러오기
+  const config = await loadConfiguration();
+
+  editorArea.innerHTML = `
+    <div class="configuration-screen" style="padding: 40px 60px; font-family: 'Segoe UI', sans-serif; max-width: 600px;">
+      <h1 style="font-size: 28px; font-weight: 600; margin-bottom: 8px; color: #cccccc;">Configuration</h1>
+      <p style="font-size: 14px; color: #858585; margin-bottom: 32px;">Project settings for Virtual Validation Tools</p>
+
+      <div style="display: flex; flex-direction: column; gap: 24px;">
+        <!-- Codebeamer Settings -->
+        <div class="config-section">
+          <h2 style="font-size: 14px; font-weight: 600; color: #cccccc; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px;">Codebeamer Settings</h2>
+
+          <div class="config-field" style="margin-bottom: 16px;">
+            <label style="display: block; font-size: 13px; color: #cccccc; margin-bottom: 6px;">Server URL</label>
+            <input type="text" id="configCbUrl" value="${escapeHtml(config.codebeamer?.url || '')}"
+                   placeholder="https://codebeamer.example.com"
+                   style="width: 100%; padding: 8px 12px; background: #3c3c3c; border: 1px solid #5a5a5a; border-radius: 4px; color: #cccccc; font-size: 13px; outline: none;">
+          </div>
+
+          <div class="config-field" style="margin-bottom: 16px;">
+            <label style="display: block; font-size: 13px; color: #cccccc; margin-bottom: 6px;">Username</label>
+            <input type="text" id="configCbUsername" value="${escapeHtml(config.codebeamer?.username || '')}"
+                   placeholder="your.username"
+                   style="width: 100%; padding: 8px 12px; background: #3c3c3c; border: 1px solid #5a5a5a; border-radius: 4px; color: #cccccc; font-size: 13px; outline: none;">
+          </div>
+
+          <div class="config-field" style="margin-bottom: 16px;">
+            <label style="display: block; font-size: 13px; color: #cccccc; margin-bottom: 6px;">Project ID</label>
+            <input type="text" id="configCbProjectId" value="${escapeHtml(config.codebeamer?.projectId || '')}"
+                   placeholder="12345"
+                   style="width: 100%; padding: 8px 12px; background: #3c3c3c; border: 1px solid #5a5a5a; border-radius: 4px; color: #cccccc; font-size: 13px; outline: none;">
+          </div>
+
+          <div class="config-field" style="margin-bottom: 16px;">
+            <label style="display: block; font-size: 13px; color: #cccccc; margin-bottom: 6px;">Tracker ID</label>
+            <input type="text" id="configCbTrackerId" value="${escapeHtml(config.codebeamer?.trackerId || '')}"
+                   placeholder="67890"
+                   style="width: 100%; padding: 8px 12px; background: #3c3c3c; border: 1px solid #5a5a5a; border-radius: 4px; color: #cccccc; font-size: 13px; outline: none;">
           </div>
         </div>
 
-        <div class="wizard-option" onclick="importFromExcel()" style="display: flex; align-items: center; gap: 16px; padding: 16px 20px; background: #2d2d2d; border: 1px solid #454545; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
-          <div style="width: 40px; height: 40px; background: #217346; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
-            <i class="codicon codicon-file" style="font-size: 20px; color: white;"></i>
+        <!-- Excel Settings -->
+        <div class="config-section">
+          <h2 style="font-size: 14px; font-weight: 600; color: #cccccc; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px;">Excel Settings</h2>
+
+          <div class="config-field" style="margin-bottom: 16px;">
+            <label style="display: block; font-size: 13px; color: #cccccc; margin-bottom: 6px;">Default Excel File Path</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="configExcelPath" value="${escapeHtml(config.excel?.defaultPath || '')}"
+                     placeholder="C:\\path\\to\\testcases.xlsx"
+                     style="flex: 1; padding: 8px 12px; background: #3c3c3c; border: 1px solid #5a5a5a; border-radius: 4px; color: #cccccc; font-size: 13px; outline: none;">
+              <button onclick="browseExcelFile()" style="padding: 8px 16px; background: #0e639c; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 13px;">Browse...</button>
+            </div>
           </div>
-          <div>
-            <div style="font-size: 14px; font-weight: 500; color: #cccccc; margin-bottom: 4px;">Import from Excel</div>
-            <div style="font-size: 12px; color: #858585;">Import testcases from an Excel file (.xlsx)</div>
+        </div>
+
+        <!-- User Settings -->
+        <div class="config-section">
+          <h2 style="font-size: 14px; font-weight: 600; color: #cccccc; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px;">User Settings</h2>
+
+          <div class="config-field" style="margin-bottom: 16px;">
+            <label style="display: block; font-size: 13px; color: #cccccc; margin-bottom: 6px;">Account Name</label>
+            <input type="text" id="configAccountName" value="${escapeHtml(config.user?.accountName || '')}"
+                   placeholder="John Doe"
+                   style="width: 100%; padding: 8px 12px; background: #3c3c3c; border: 1px solid #5a5a5a; border-radius: 4px; color: #cccccc; font-size: 13px; outline: none;">
           </div>
+
+          <div class="config-field" style="margin-bottom: 16px;">
+            <label style="display: block; font-size: 13px; color: #cccccc; margin-bottom: 6px;">Email</label>
+            <input type="text" id="configEmail" value="${escapeHtml(config.user?.email || '')}"
+                   placeholder="john.doe@example.com"
+                   style="width: 100%; padding: 8px 12px; background: #3c3c3c; border: 1px solid #5a5a5a; border-radius: 4px; color: #cccccc; font-size: 13px; outline: none;">
+          </div>
+        </div>
+
+        <!-- Save Button -->
+        <div style="margin-top: 16px;">
+          <button onclick="saveConfiguration()" style="padding: 10px 24px; background: #0e639c; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 14px; font-weight: 500;">
+            Save Configuration
+          </button>
+          <span id="configSaveStatus" style="margin-left: 16px; font-size: 13px; color: #858585;"></span>
         </div>
       </div>
     </div>
   `;
 
-  // 호버 효과 추가
-  const wizardOptions = editorArea.querySelectorAll('.wizard-option');
-  wizardOptions.forEach(option => {
-    option.addEventListener('mouseenter', () => {
-      option.style.borderColor = '#007acc';
-      option.style.background = '#37373d';
+  // 입력 필드 포커스 스타일 추가
+  const inputs = editorArea.querySelectorAll('input');
+  inputs.forEach(input => {
+    input.addEventListener('focus', () => {
+      input.style.borderColor = '#007acc';
     });
-    option.addEventListener('mouseleave', () => {
-      option.style.borderColor = '#454545';
-      option.style.background = '#2d2d2d';
+    input.addEventListener('blur', () => {
+      input.style.borderColor = '#5a5a5a';
     });
   });
+}
+
+// 설정 불러오기
+async function loadConfiguration() {
+  if (!currentProjectPath) return {};
+
+  try {
+    const configPath = currentProjectPath + '\\.vvu.config';
+    const content = await window.electronAPI.fs.readFile(configPath);
+    return JSON.parse(content);
+  } catch (error) {
+    // 파일이 없거나 파싱 오류시 빈 객체 반환
+    return {};
+  }
+}
+
+// 설정 저장
+async function saveConfiguration() {
+  if (!currentProjectPath) return;
+
+  const config = {
+    codebeamer: {
+      url: document.getElementById('configCbUrl')?.value || '',
+      username: document.getElementById('configCbUsername')?.value || '',
+      projectId: document.getElementById('configCbProjectId')?.value || '',
+      trackerId: document.getElementById('configCbTrackerId')?.value || ''
+    },
+    excel: {
+      defaultPath: document.getElementById('configExcelPath')?.value || ''
+    },
+    user: {
+      accountName: document.getElementById('configAccountName')?.value || '',
+      email: document.getElementById('configEmail')?.value || ''
+    }
+  };
+
+  try {
+    const configPath = currentProjectPath + '\\.vvu.config';
+    const result = await window.electronAPI.fs.writeFile(configPath, JSON.stringify(config, null, 2));
+
+    const statusEl = document.getElementById('configSaveStatus');
+    if (result.success) {
+      statusEl.textContent = 'Configuration saved successfully!';
+      statusEl.style.color = '#4ec9b0';
+
+      // Explorer 새로고침
+      await refreshExplorer();
+    } else {
+      statusEl.textContent = 'Failed to save configuration.';
+      statusEl.style.color = '#f14c4c';
+    }
+
+    // 3초 후 메시지 숨기기
+    setTimeout(() => {
+      statusEl.textContent = '';
+    }, 3000);
+  } catch (error) {
+    console.error('Error saving configuration:', error);
+  }
+}
+
+// Explorer 새로고침
+async function refreshExplorer() {
+  if (currentProjectPath) {
+    // 현재 확장된 폴더 상태 저장
+    const expandedFolders = new Set();
+    document.querySelectorAll('.tree-item-children.expanded').forEach(el => {
+      expandedFolders.add(el.id);
+    });
+
+    await loadProjectFiles(currentProjectPath);
+
+    // 확장된 폴더 상태 복원
+    expandedFolders.forEach(folderId => {
+      const children = document.getElementById(folderId);
+      if (children) {
+        children.classList.add('expanded');
+        // 해당 폴더의 chevron도 업데이트
+        const folder = children.previousElementSibling;
+        if (folder && folder.classList.contains('folder')) {
+          const chevron = folder.querySelector('.chevron');
+          if (chevron) chevron.classList.add('expanded');
+        }
+      }
+    });
+  }
+}
+
+// Excel 파일 찾아보기
+async function browseExcelFile() {
+  try {
+    const filePath = await window.electronAPI.dialog.openFile({
+      filters: [{ name: 'Excel Files', extensions: ['xlsx', 'xls'] }]
+    });
+
+    if (filePath) {
+      const inputEl = document.getElementById('configExcelPath');
+      if (inputEl) {
+        inputEl.value = filePath;
+      }
+    }
+  } catch (error) {
+    console.error('Error browsing file:', error);
+  }
 }
 
 // Codebeamer에서 불러오기 (UI만)
@@ -797,20 +3042,23 @@ async function importFromExcel() {
     });
 
     if (filePath) {
-      const fileName = filePath.split(/[\\/]/).pop();
-      showToast('info', `Processing: ${fileName}`);
-
       // Output 패널이 닫혀있으면 열기
       if (!outputPanelVisible) {
-        toggleOutputPanel();
+        const panel = document.getElementById('bottomPanel');
+        const checkmark = document.getElementById('outputCheckmark');
+        panel.classList.add('show');
+        if (checkmark) checkmark.textContent = '✓';
+        outputPanelVisible = true;
       }
+
+      // OUTPUT 탭으로 전환
+      switchBottomTab('output');
 
       // Python 스크립트 실행
       appendOutput(`Selected Excel file: ${filePath}`, 'info');
       await runPythonScript('scripts/excel_handler.py', [filePath]);
     }
   } catch (error) {
-    showToast('error', 'Failed to open file dialog.');
     console.error('Error opening file dialog:', error);
   }
 }
@@ -2473,32 +4721,12 @@ function removeToast(toast) {
 
 let outputPanelVisible = true;
 
-// View 메뉴 토글
-function toggleViewMenu(event) {
-  event.stopPropagation();
-  const dropdown = document.getElementById('viewDropdown');
-  dropdown.classList.toggle('show');
-
-  // 다른 곳 클릭하면 닫기
-  const closeDropdown = (e) => {
-    if (!e.target.closest('#viewMenu')) {
-      dropdown.classList.remove('show');
-      document.removeEventListener('click', closeDropdown);
-    }
-  };
-
-  if (dropdown.classList.contains('show')) {
-    setTimeout(() => document.addEventListener('click', closeDropdown), 0);
-  }
-}
-
 // Output 패널 토글
 function toggleOutputPanel(event) {
   if (event) event.stopPropagation();
 
   // 드롭다운 닫기
-  const dropdown = document.getElementById('viewDropdown');
-  if (dropdown) dropdown.classList.remove('show');
+  closeAllMenus();
 
   const panel = document.getElementById('bottomPanel');
   const checkmark = document.getElementById('outputCheckmark');
@@ -2519,8 +4747,7 @@ function toggleDevToolsFromMenu(event) {
   if (event) event.stopPropagation();
 
   // 드롭다운 닫기
-  const dropdown = document.getElementById('viewDropdown');
-  if (dropdown) dropdown.classList.remove('show');
+  closeAllMenus();
 
   toggleDevTools();
 }
@@ -2684,25 +4911,50 @@ function switchBottomTab(tabName) {
     if (terminals.length === 0) {
       createNewTerminal();
     } else {
-      // 입력 필드에 포커스
+      // 터미널에 포커스
       setTimeout(() => {
-        document.getElementById('terminalInput')?.focus();
+        focusTerminal();
       }, 100);
     }
   }
 }
 
+// 터미널 기본 경로 결정
+async function getTerminalDefaultPath() {
+  // 1. Open Folder로 열린 경로가 있으면 사용
+  if (currentProjectPath) {
+    return currentProjectPath;
+  }
+
+  // 2. D:\ 드라이브 확인
+  try {
+    const dItems = await window.electronAPI.fs.readdir('D:\\');
+    if (dItems && dItems.length >= 0) {
+      return 'D:\\';
+    }
+  } catch (e) {
+    // D:\ 접근 불가
+  }
+
+  // 3. C:\ 사용
+  return 'C:\\';
+}
+
 // 새 터미널 생성
 async function createNewTerminal() {
   try {
-    const result = await window.electronAPI.terminal.create();
+    const defaultPath = await getTerminalDefaultPath();
+    const result = await window.electronAPI.terminal.create(defaultPath);
     const terminalNum = terminals.length + 1;
 
     const terminal = {
       id: result.terminalId,
       name: `cmd ${terminalNum}`,
       cwd: result.cwd,
-      output: []
+      output: [],
+      currentInput: '',  // 현재 입력 중인 문자열
+      tabIndex: 0,       // Tab 자동완성 인덱스
+      tabMatches: []     // Tab 자동완성 매칭 목록
     };
 
     terminals.push(terminal);
@@ -2711,9 +4963,9 @@ async function createNewTerminal() {
     renderTerminalList();
     renderTerminalContent();
 
-    // 입력 필드에 포커스
+    // 터미널에 포커스
     setTimeout(() => {
-      document.getElementById('terminalInput')?.focus();
+      focusTerminal();
     }, 100);
 
   } catch (error) {
@@ -2744,14 +4996,13 @@ function switchTerminal(terminalId) {
   renderTerminalContent();
 
   setTimeout(() => {
-    document.getElementById('terminalInput')?.focus();
+    focusTerminal();
   }, 50);
 }
 
 // 터미널 내용 렌더링
 function renderTerminalContent() {
   const contentEl = document.getElementById('terminalContent');
-  const inputEl = document.getElementById('terminalInput');
 
   if (!contentEl) return;
 
@@ -2767,9 +5018,7 @@ function renderTerminalContent() {
   ).join('');
 
   // 현재 입력 라인 표시 (프롬프트 + 타이핑 중인 내용)
-  const currentInput = inputEl ? inputEl.value : '';
-  const shortCwd = terminal.cwd ? terminal.cwd.split(/[\\/]/).pop() : 'cmd';
-  html += `<div class="terminal-output-line"><span style="color:#6a9955">${escapeHtml(shortCwd)}>&nbsp;</span>${escapeHtml(currentInput)}<span class="terminal-cursor"></span></div>`;
+  html += `<div class="terminal-output-line"><span style="color:#6a9955">&gt;&nbsp;</span>${escapeHtml(terminal.currentInput)}<span class="terminal-cursor"></span></div>`;
 
   contentEl.innerHTML = html;
 
@@ -2777,11 +5026,11 @@ function renderTerminalContent() {
   contentEl.scrollTop = contentEl.scrollHeight;
 }
 
-// 터미널 입력 포커스
-function focusTerminalInput() {
-  const inputEl = document.getElementById('terminalInput');
-  if (inputEl) {
-    inputEl.focus();
+// 터미널 포커스
+function focusTerminal() {
+  const contentEl = document.getElementById('terminalContent');
+  if (contentEl) {
+    contentEl.focus();
   }
 }
 
@@ -2846,8 +5095,7 @@ async function handleTerminalInput(command) {
   if (!terminal) return;
 
   // 입력한 명령어를 출력에 추가
-  const shortCwd = terminal.cwd ? terminal.cwd.split(/[\\/]/).pop() : 'cmd';
-  terminal.output.push({ text: `${shortCwd}> ${command}`, type: '' });
+  terminal.output.push({ text: `> ${command}`, type: '' });
   renderTerminalContent();
 
   // 빈 명령어면 전송하지 않음
@@ -2883,22 +5131,837 @@ function setupTerminalListeners() {
     appendTerminalOutput(data.terminalId, `\nProcess exited with code ${data.code}`, 'error');
   });
 
-  // 터미널 입력 필드 이벤트
-  const inputEl = document.getElementById('terminalInput');
-  if (inputEl) {
-    // 입력 중 실시간 업데이트
-    inputEl.addEventListener('input', () => {
+  // 터미널 키보드 이벤트 (terminalContent에 직접 바인딩)
+  const contentEl = document.getElementById('terminalContent');
+  if (contentEl) {
+    contentEl.addEventListener('keydown', handleTerminalKeyDown);
+  }
+}
+
+// 터미널 키보드 이벤트 처리
+function handleTerminalKeyDown(e) {
+  const terminal = terminals.find(t => t.id === activeTerminalId);
+  if (!terminal) return;
+
+  // Tab: 자동완성
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    handleTabCompletion(terminal);
+    return;
+  }
+
+  // Enter: 명령어 실행
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const command = terminal.currentInput;
+    terminal.currentInput = '';
+    terminal.tabMatches = [];
+    terminal.tabIndex = 0;
+    handleTerminalInput(command);
+    return;
+  }
+
+  // Backspace: 글자 삭제
+  if (e.key === 'Backspace') {
+    e.preventDefault();
+    if (terminal.currentInput.length > 0) {
+      terminal.currentInput = terminal.currentInput.slice(0, -1);
+      terminal.tabMatches = [];
+      terminal.tabIndex = 0;
       renderTerminalContent();
+    }
+    return;
+  }
+
+  // Escape: 입력 취소
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    terminal.currentInput = '';
+    terminal.tabMatches = [];
+    terminal.tabIndex = 0;
+    renderTerminalContent();
+    return;
+  }
+
+  // Ctrl+C: 입력 취소 및 새 줄
+  if (e.ctrlKey && e.key === 'c') {
+    e.preventDefault();
+    terminal.output.push({ text: `> ${terminal.currentInput}^C`, type: '' });
+    terminal.currentInput = '';
+    terminal.tabMatches = [];
+    terminal.tabIndex = 0;
+    renderTerminalContent();
+    return;
+  }
+
+  // 일반 문자 입력 (printable characters)
+  if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    e.preventDefault();
+    terminal.currentInput += e.key;
+    terminal.tabMatches = [];
+    terminal.tabIndex = 0;
+    renderTerminalContent();
+  }
+}
+
+// Tab 자동완성 처리
+async function handleTabCompletion(terminal) {
+  // 현재 입력에서 마지막 토큰 추출
+  const input = terminal.currentInput;
+  const tokens = input.split(/\s+/);
+  const lastToken = tokens[tokens.length - 1] || '';
+
+  // 검색 경로 결정
+  let searchDir = terminal.cwd;
+  let prefix = lastToken;
+
+  // 경로 구분자가 있으면 경로와 prefix 분리
+  const lastSlash = Math.max(lastToken.lastIndexOf('/'), lastToken.lastIndexOf('\\'));
+  if (lastSlash >= 0) {
+    const pathPart = lastToken.substring(0, lastSlash + 1);
+    prefix = lastToken.substring(lastSlash + 1);
+
+    // 절대 경로인지 상대 경로인지 확인
+    if (/^[A-Za-z]:/.test(pathPart)) {
+      searchDir = pathPart;
+    } else {
+      searchDir = terminal.cwd + '\\' + pathPart;
+    }
+  }
+
+  // 이미 매칭된 목록이 있으면 다음 항목으로 순환
+  if (terminal.tabMatches.length > 0) {
+    terminal.tabIndex = (terminal.tabIndex + 1) % terminal.tabMatches.length;
+    applyTabCompletion(terminal, tokens, lastSlash, prefix);
+    return;
+  }
+
+  // 디렉토리 목록 가져오기
+  try {
+    const items = await window.electronAPI.fs.readdir(searchDir);
+    const matches = items
+      .filter(item => item.name.toLowerCase().startsWith(prefix.toLowerCase()))
+      .map(item => ({
+        name: item.name,
+        isDirectory: item.isDirectory
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    if (matches.length > 0) {
+      terminal.tabMatches = matches;
+      terminal.tabIndex = 0;
+      applyTabCompletion(terminal, tokens, lastSlash, prefix);
+    }
+  } catch (error) {
+    // 디렉토리 접근 실패시 무시
+  }
+}
+
+// Tab 자동완성 적용
+function applyTabCompletion(terminal, tokens, lastSlash, prefix) {
+  const match = terminal.tabMatches[terminal.tabIndex];
+  const completedName = match.isDirectory ? match.name + '\\' : match.name;
+
+  // 마지막 토큰 교체
+  if (lastSlash >= 0) {
+    const pathPart = tokens[tokens.length - 1].substring(0, lastSlash + 1);
+    tokens[tokens.length - 1] = pathPart + completedName;
+  } else {
+    tokens[tokens.length - 1] = completedName;
+  }
+
+  terminal.currentInput = tokens.join(' ');
+  renderTerminalContent();
+}
+
+// =============================================
+// Chat Panel (Copilot 스타일)
+// =============================================
+
+let chatMessages = [];
+let isChatLoading = false;
+let isChatResizing = false;
+let chatSystemPrompt = '';
+let chatPromptHistory = '';  // .vvu.prompt.history.md 내용
+let chatPromptLast = '';     // .vvu.prompt.last.md 내용
+let chatUserHistory = [];    // 사용자 질문 히스토리 (Up/Down 키용)
+let chatHistoryIndex = -1;   // 현재 히스토리 인덱스
+let chatTempInput = '';      // Up 키 누르기 전 임시 저장
+
+// Chat 초기화
+async function initChat() {
+  // Ollama 모델 목록 로드
+  await loadOllamaModels();
+  // Chat 패널 리사이저 설정
+  setupChatPanelResizer();
+  // 시스템 프롬프트 로드
+  await loadChatSystemPrompt();
+  // 히스토리 파일 로드
+  await loadChatHistoryFiles();
+}
+
+// 시스템 프롬프트 파일 로드
+async function loadChatSystemPrompt() {
+  // 프로젝트가 열려있지 않으면 기본 프롬프트 없이 진행
+  if (!currentProjectPath) {
+    chatSystemPrompt = '';
+    console.log('No project opened, chat system prompt not loaded');
+    return;
+  }
+
+  try {
+    const promptPath = currentProjectPath + '/.vvu.prompt.base.md';
+
+    // 파일이 없으면 기본 파일 생성
+    const content = await window.electronAPI.fs.readFile(promptPath);
+    if (content && !content.startsWith('Error reading file')) {
+      chatSystemPrompt = content;
+      console.log('Chat system prompt loaded from:', promptPath);
+    } else {
+      // 기본 프롬프트 생성
+      const defaultPrompt = `# VVU Chat System Instructions
+
+아래 지시사항을 숙지하고 사용자의 질문에 답변하세요.
+
+## 질문 유형 분류 및 답변 가이드라인
+
+먼저 사용자의 질문 유형을 파악하고, 답변 첫 줄에 질문 유형을 명시합니다.
+
+### 1. 지식 관련 질문 (Knowledge Questions)
+지식, 개념, 정의에 대한 질문인 경우:
+
+**답변 형식:**
+1. 첫 줄: "**지식 관련 질문입니다.**"
+2. **정의**: 핵심 개념을 간결하게 정의
+3. **설명**: 관련 내용을 이해하기 쉽게 설명
+4. **대표적인 사례**: 3개의 구체적인 예시 제공
+
+**주의:** 마크다운 표는 사용하지 않고, 핵심 내용을 이해하기 쉽게 풀어서 설명합니다.
+
+### 2. 코드 관련 질문 (Code Questions)
+코드 작성, 버그 수정, 리팩토링 등의 질문인 경우:
+
+**답변 형식:**
+1. 첫 줄: "**코드 관련 질문입니다.**"
+2. 문제 분석
+3. 해결 방안 제시
+4. 코드 예시 제공
+
+### 3. 일반 질문 (General Questions)
+위 유형에 해당하지 않는 일반적인 질문:
+
+**답변 형식:**
+1. 첫 줄: "**일반 질문입니다.**"
+2. 질문 의도 파악
+3. 명확하고 간결한 답변 제공
+
+---
+
+**공통 주의사항:**
+- 응답은 항상 한국어로 작성합니다 (코드 제외)
+- 불필요한 서론 없이 바로 본론으로 들어갑니다
+- 마크다운 형식을 활용하여 가독성을 높입니다
+- 마크다운 표는 사용하지 않습니다
+`;
+      await window.electronAPI.fs.writeFile(promptPath, defaultPrompt);
+      chatSystemPrompt = defaultPrompt;
+      console.log('Chat system prompt created at:', promptPath);
+      // Explorer 새로고침하여 새 파일 표시
+      refreshExplorer();
+    }
+  } catch (error) {
+    console.error('Error loading chat system prompt:', error);
+  }
+}
+
+// 히스토리 파일 로드
+async function loadChatHistoryFiles() {
+  if (!currentProjectPath) return;
+
+  try {
+    // .vvu.prompt.history.md 로드
+    const historyPath = currentProjectPath + '/.vvu.prompt.history.md';
+    const historyContent = await window.electronAPI.fs.readFile(historyPath);
+    if (historyContent && !historyContent.startsWith('Error reading file')) {
+      chatPromptHistory = historyContent;
+      // 히스토리에서 사용자 질문 추출하여 chatUserHistory에 저장
+      const questions = historyContent.split('\n')
+        .filter(line => line.startsWith('- '))
+        .map(line => line.substring(2).trim());
+      chatUserHistory = questions;
+    } else {
+      chatPromptHistory = '';
+      chatUserHistory = [];
+    }
+
+    // .vvu.prompt.last.md 로드
+    const lastPath = currentProjectPath + '/.vvu.prompt.last.md';
+    const lastContent = await window.electronAPI.fs.readFile(lastPath);
+    if (lastContent && !lastContent.startsWith('Error reading file')) {
+      chatPromptLast = lastContent;
+    } else {
+      chatPromptLast = '';
+    }
+
+    console.log('Chat history files loaded, questions:', chatUserHistory.length);
+  } catch (error) {
+    console.error('Error loading chat history files:', error);
+  }
+}
+
+// 히스토리 파일 저장 (메시지 전송 후 호출)
+async function saveChatHistoryFiles(userQuestion, aiResponse) {
+  if (!currentProjectPath) return;
+
+  try {
+    // 1. 기존 last의 질문을 history로 이동 (AI 답변 제외)
+    if (chatPromptLast) {
+      const lastLines = chatPromptLast.split('\n');
+      const questionLine = lastLines.find(line => line.startsWith('**Q:**'));
+      if (questionLine) {
+        const prevQuestion = questionLine.replace('**Q:** ', '').trim();
+        // 이미 history에 없으면 추가
+        if (!chatUserHistory.includes(prevQuestion)) {
+          chatUserHistory.push(prevQuestion);
+        }
+      }
+    }
+
+    // 2. 현재 질문을 userHistory에 추가 (Up/Down 키용)
+    if (!chatUserHistory.includes(userQuestion)) {
+      chatUserHistory.push(userQuestion);
+    }
+
+    // 3. 30개 제한 (오래된 것 삭제)
+    while (chatUserHistory.length > 30) {
+      chatUserHistory.shift();
+    }
+
+    // 4. .vvu.prompt.history.md 저장 (마지막 질문 제외한 이전 질문들만)
+    const historyQuestions = chatUserHistory.slice(0, -1);  // 마지막 제외
+    if (historyQuestions.length > 0) {
+      const historyContent = `# Chat History (Previous Questions)\n\n${historyQuestions.map(q => '- ' + q).join('\n')}\n`;
+      const historyPath = currentProjectPath + '/.vvu.prompt.history.md';
+      await window.electronAPI.fs.writeFile(historyPath, historyContent);
+      chatPromptHistory = historyContent;
+    }
+
+    // 5. .vvu.prompt.last.md 저장 (마지막 Q&A)
+    const lastContent = `# Last Conversation\n\n**Q:** ${userQuestion}\n\n**A:** ${aiResponse}\n`;
+    const lastPath = currentProjectPath + '/.vvu.prompt.last.md';
+    await window.electronAPI.fs.writeFile(lastPath, lastContent);
+    chatPromptLast = lastContent;
+
+    // 히스토리 인덱스 리셋
+    chatHistoryIndex = -1;
+    chatTempInput = '';
+
+    console.log('Chat history files saved, total questions:', chatUserHistory.length);
+  } catch (error) {
+    console.error('Error saving chat history files:', error);
+  }
+}
+
+// Chat 패널 리사이저 설정
+function setupChatPanelResizer() {
+  const resizer = document.getElementById('chatPanelResizer');
+  const chatPanel = document.getElementById('chatPanel');
+
+  if (!resizer || !chatPanel) return;
+
+  let startX, startWidth;
+
+  resizer.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    isChatResizing = true;
+    startX = e.clientX;
+    startWidth = chatPanel.offsetWidth;
+    resizer.classList.add('resizing');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isChatResizing) return;
+
+    // 왼쪽으로 드래그하면 너비 증가, 오른쪽으로 드래그하면 너비 감소
+    const diff = startX - e.clientX;
+    const newWidth = Math.min(Math.max(startWidth + diff, 280), 1600);
+    chatPanel.style.width = newWidth + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isChatResizing) {
+      isChatResizing = false;
+      resizer.classList.remove('resizing');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  });
+}
+
+// 코드 블록 ID 카운터
+let codeBlockCounter = 0;
+
+// 간단한 마크다운 렌더링
+function renderMarkdown(text) {
+  // 코드 블록 (```)
+  text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
+    const escapedCode = escapeHtml(code.trim());
+    return `<pre style="background: #1e1e1e; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 8px 0;"><code style="font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; color: #d4d4d4;">${escapedCode}</code></pre>`;
+  });
+
+  // 테이블 렌더링
+  text = text.replace(/(\|.+\|[\r\n]+\|[-:\s|]+\|[\r\n]+(?:\|.+\|[\r\n]*)+)/g, (match) => {
+    const lines = match.trim().split('\n').filter(line => line.trim());
+    if (lines.length < 2) return match;
+
+    // 헤더 행
+    const headerCells = lines[0].split('|').filter(cell => cell.trim() !== '');
+    // 구분선 (정렬 정보)
+    const alignLine = lines[1].split('|').filter(cell => cell.trim() !== '');
+    const alignments = alignLine.map(cell => {
+      const trimmed = cell.trim();
+      if (trimmed.startsWith(':') && trimmed.endsWith(':')) return 'center';
+      if (trimmed.endsWith(':')) return 'right';
+      return 'left';
     });
 
-    // Enter 키 처리
-    inputEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const command = inputEl.value;
-        inputEl.value = '';
-        handleTerminalInput(command);
-      }
+    // 데이터 행
+    const dataRows = lines.slice(2);
+
+    let tableHtml = '<table style="border-collapse: collapse; margin: 8px 0; width: 100%; font-size: 12px;">';
+
+    // 헤더
+    tableHtml += '<thead><tr>';
+    headerCells.forEach((cell, i) => {
+      const align = alignments[i] || 'left';
+      tableHtml += `<th style="border: 1px solid #555; padding: 8px 12px; background: #2d2d2d; text-align: ${align}; color: #e0e0e0; font-weight: 600;">${cell.trim()}</th>`;
+    });
+    tableHtml += '</tr></thead>';
+
+    // 바디
+    tableHtml += '<tbody>';
+    dataRows.forEach(row => {
+      const cells = row.split('|').filter(cell => cell.trim() !== '');
+      tableHtml += '<tr>';
+      cells.forEach((cell, i) => {
+        const align = alignments[i] || 'left';
+        tableHtml += `<td style="border: 1px solid #454545; padding: 6px 12px; text-align: ${align}; color: #cccccc;">${cell.trim()}</td>`;
+      });
+      tableHtml += '</tr>';
+    });
+    tableHtml += '</tbody></table>';
+
+    return tableHtml;
+  });
+
+  // 인라인 코드 (`)
+  text = text.replace(/`([^`]+)`/g, '<code style="background: #3c3c3c; padding: 2px 6px; border-radius: 3px; font-family: \'Consolas\', monospace; font-size: 12px;">$1</code>');
+
+  // 헤더
+  text = text.replace(/^### (.+)$/gm, '<h3 style="font-size: 14px; font-weight: 600; margin: 12px 0 8px 0; color: #e0e0e0;">$1</h3>');
+  text = text.replace(/^## (.+)$/gm, '<h2 style="font-size: 15px; font-weight: 600; margin: 14px 0 8px 0; color: #e0e0e0;">$1</h2>');
+  text = text.replace(/^# (.+)$/gm, '<h1 style="font-size: 16px; font-weight: 600; margin: 16px 0 10px 0; color: #ffffff;">$1</h1>');
+
+  // 볼드 (**text** 또는 __text__)
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong style="color: #ffffff;">$1</strong>');
+  text = text.replace(/__(.+?)__/g, '<strong style="color: #ffffff;">$1</strong>');
+
+  // 이탤릭 (*text* 또는 _text_)
+  text = text.replace(/\*([^\*]+)\*/g, '<em>$1</em>');
+  text = text.replace(/_([^_]+)_/g, '<em>$1</em>');
+
+  // 리스트 항목 (- 또는 *)
+  text = text.replace(/^[\-\*] (.+)$/gm, '<li style="margin-left: 16px; margin-bottom: 4px;">$1</li>');
+
+  // 숫자 리스트
+  text = text.replace(/^\d+\. (.+)$/gm, '<li style="margin-left: 16px; margin-bottom: 4px;">$1</li>');
+
+  // 줄바꿈
+  text = text.replace(/\n/g, '<br>');
+
+  return text;
+}
+
+// 코드 블록 복사 함수
+function copyCodeBlock(codeId) {
+  const codeElement = document.getElementById(codeId);
+  if (codeElement) {
+    const code = codeElement.textContent;
+    navigator.clipboard.writeText(code).then(() => {
+      showToast('success', 'Code copied to clipboard!');
+    }).catch(err => {
+      console.error('Failed to copy:', err);
+      showToast('error', 'Failed to copy code');
     });
   }
+}
+
+// Ollama 모델 목록 로드
+async function loadOllamaModels() {
+  try {
+    const response = await fetch('http://localhost:11434/api/tags');
+    if (response.ok) {
+      const data = await response.json();
+      const select = document.getElementById('llmSelect');
+      if (select && data.models && data.models.length > 0) {
+        select.innerHTML = data.models.map(model =>
+          `<option value="${model.name}" ${model.name === 'gpt-oss:20b' ? 'selected' : ''}>${model.name}</option>`
+        ).join('');
+
+        // gpt-oss:20b가 없으면 첫번째 모델 선택
+        if (!data.models.find(m => m.name === 'gpt-oss:20b')) {
+          select.value = data.models[0].name;
+        }
+      }
+    }
+  } catch (error) {
+    console.log('Ollama not available:', error.message);
+    // Ollama가 없으면 기본값 유지
+  }
+}
+
+// Chat 패널 토글
+async function toggleChatPanel(event) {
+  if (event) {
+    event.stopPropagation();
+    closeAllMenus();
+  }
+
+  const chatPanel = document.getElementById('chatPanel');
+  if (chatPanel.style.display === 'none') {
+    chatPanel.style.display = 'flex';
+    document.getElementById('chatInput').focus();
+
+    // Open Chat 시 .vvu.prompt.history.md 삭제 (새 대화 세션 시작)
+    if (currentProjectPath) {
+      const historyPath = currentProjectPath + '/.vvu.prompt.history.md';
+      try {
+        await window.electronAPI.fs.delete(historyPath);
+        console.log('Deleted chat history file on Open Chat');
+      } catch (error) {
+        // 파일이 없어도 무시
+      }
+    }
+
+    // 패널 열 때마다 프롬프트 파일들 새로고침 (파일 수정 반영)
+    await loadChatSystemPrompt();
+    await loadChatHistoryFiles();
+
+    // 첨부 파일 목록 업데이트
+    updateChatAttachments();
+  } else {
+    chatPanel.style.display = 'none';
+  }
+}
+
+// Chat 히스토리 초기화 (화면만)
+function clearChatHistory() {
+  chatMessages = [];
+  const messagesContainer = document.getElementById('chatMessages');
+  messagesContainer.innerHTML = `
+    <div class="chat-welcome">
+      <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">Welcome to Chat</div>
+      <div style="color: #858585;">Ask me anything about your project or code.</div>
+    </div>
+  `;
+}
+
+// Chat 전체 초기화 (대화창 + 입력 히스토리 + 파일)
+async function resetChat() {
+  // 대화 창 초기화
+  chatMessages = [];
+  const messagesContainer = document.getElementById('chatMessages');
+  messagesContainer.innerHTML = `
+    <div class="chat-welcome">
+      <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">Welcome to Chat</div>
+      <div style="color: #858585;">Ask me anything about your project or code.</div>
+    </div>
+  `;
+
+  // 입력 히스토리 초기화
+  chatUserHistory = [];
+  chatHistoryIndex = -1;
+  chatTempInput = '';
+  chatPromptHistory = '';
+  chatPromptLast = '';
+
+  // 입력창 초기화
+  const input = document.getElementById('chatInput');
+  if (input) {
+    input.value = '';
+    input.style.height = 'auto';
+  }
+
+  // 히스토리 파일들 삭제
+  if (currentProjectPath) {
+    try {
+      await window.electronAPI.fs.delete(currentProjectPath + '/.vvu.prompt.history.md');
+    } catch (error) { /* 무시 */ }
+    try {
+      await window.electronAPI.fs.delete(currentProjectPath + '/.vvu.prompt.last.md');
+    } catch (error) { /* 무시 */ }
+  }
+
+  // 첨부 파일 체크 해제
+  openTabs.forEach(tab => {
+    tab.chatAttached = false;
+  });
+  updateChatAttachments();
+
+  console.log('Chat fully reset');
+}
+
+// Enter 키 처리
+function handleChatKeydown(event) {
+  const textarea = event.target;
+
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    sendChatMessage();
+    return;
+  }
+
+  // Up 키: 이전 히스토리로 이동
+  if (event.key === 'ArrowUp' && chatUserHistory.length > 0) {
+    event.preventDefault();
+
+    // 처음 Up 키를 누르면 현재 입력 저장
+    if (chatHistoryIndex === -1) {
+      chatTempInput = textarea.value;
+      chatHistoryIndex = chatUserHistory.length - 1;
+    } else if (chatHistoryIndex > 0) {
+      chatHistoryIndex--;
+    }
+
+    textarea.value = chatUserHistory[chatHistoryIndex] || '';
+    return;
+  }
+
+  // Down 키: 다음 히스토리로 이동
+  if (event.key === 'ArrowDown' && chatHistoryIndex !== -1) {
+    event.preventDefault();
+
+    if (chatHistoryIndex < chatUserHistory.length - 1) {
+      chatHistoryIndex++;
+      textarea.value = chatUserHistory[chatHistoryIndex] || '';
+    } else {
+      // 마지막까지 가면 임시 저장된 입력으로 복원
+      chatHistoryIndex = -1;
+      textarea.value = chatTempInput;
+    }
+    return;
+  }
+
+  // 텍스트 영역 자동 높이 조절
+  textarea.style.height = 'auto';
+  textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+}
+
+// 메시지 전송
+async function sendChatMessage() {
+  const input = document.getElementById('chatInput');
+  const message = input.value.trim();
+
+  if (!message || isChatLoading) return;
+
+  // 사용자 메시지 추가
+  addChatMessage('user', message);
+  input.value = '';
+  input.style.height = 'auto';
+
+  // 로딩 표시
+  isChatLoading = true;
+  const loadingId = showChatLoading();
+
+  try {
+    // 메시지 전송 전 시스템 프롬프트 새로고침 (파일 수정 반영)
+    await loadChatSystemPrompt();
+
+    const model = document.getElementById('llmSelect').value;
+    await streamOllamaResponse(message, model, loadingId);
+  } catch (error) {
+    console.error('Chat error:', error);
+    removeChatLoading(loadingId);
+    addChatMessage('assistant', 'Error: Failed to get response from LLM. Make sure Ollama is running.');
+  } finally {
+    isChatLoading = false;
+  }
+}
+
+// Chat 메시지 추가
+function addChatMessage(role, content) {
+  chatMessages.push({ role, content });
+
+  const messagesContainer = document.getElementById('chatMessages');
+
+  // Welcome 메시지 제거
+  const welcome = messagesContainer.querySelector('.chat-welcome');
+  if (welcome) welcome.remove();
+
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `chat-message ${role}`;
+
+  // Assistant 메시지는 마크다운 렌더링 적용
+  const renderedContent = role === 'assistant' ? renderMarkdown(content) : escapeHtml(content);
+
+  messageDiv.innerHTML = `
+    <div class="chat-message-role">${role === 'user' ? 'You' : 'Assistant'}</div>
+    <div class="chat-message-content">${renderedContent}</div>
+  `;
+
+  messagesContainer.appendChild(messageDiv);
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+  return messageDiv;
+}
+
+// 로딩 표시
+function showChatLoading() {
+  const messagesContainer = document.getElementById('chatMessages');
+  const loadingDiv = document.createElement('div');
+  loadingDiv.className = 'chat-message assistant';
+  loadingDiv.id = 'chat-loading-' + Date.now();
+  loadingDiv.innerHTML = `
+    <div class="chat-message-role">Assistant</div>
+    <div class="chat-loading">
+      <div class="chat-loading-dots">
+        <span></span><span></span><span></span>
+      </div>
+      <span>Thinking...</span>
+    </div>
+  `;
+
+  messagesContainer.appendChild(loadingDiv);
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+  return loadingDiv.id;
+}
+
+// 로딩 제거
+function removeChatLoading(loadingId) {
+  const loadingDiv = document.getElementById(loadingId);
+  if (loadingDiv) loadingDiv.remove();
+}
+
+// Ollama 스트리밍 응답
+async function streamOllamaResponse(prompt, model, loadingId) {
+  const messagesContainer = document.getElementById('chatMessages');
+  let messageDiv = null;
+  let contentDiv = null;
+  let fullResponse = '';
+  let firstChunkReceived = false;
+  const userQuestion = prompt;  // 원본 사용자 질문 저장
+
+  try {
+    // 전체 프롬프트 구성: 시스템 + 첨부파일 + 히스토리 + 마지막 대화 + 현재 질문
+    let fullPrompt = '';
+
+    if (chatSystemPrompt) {
+      fullPrompt += `[System Instructions]\n${chatSystemPrompt}\n\n`;
+    }
+
+    // 첨부된 파일 내용 추가
+    const attachedContent = getAttachedFilesContent();
+    if (attachedContent) {
+      fullPrompt += attachedContent;
+    }
+
+    if (chatPromptHistory) {
+      fullPrompt += `[Previous Questions History]\n${chatPromptHistory}\n\n`;
+    }
+
+    if (chatPromptLast) {
+      fullPrompt += `[Last Conversation]\n${chatPromptLast}\n\n`;
+    }
+
+    fullPrompt += `[Current Question]\n${prompt}`;
+
+    const response = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: model,
+        prompt: fullPrompt,
+        stream: true
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n').filter(line => line.trim());
+
+      for (const line of lines) {
+        try {
+          const json = JSON.parse(line);
+          if (json.response) {
+            // 첫 번째 응답이 오면 로딩 제거하고 메시지 div 생성
+            if (!firstChunkReceived) {
+              firstChunkReceived = true;
+              removeChatLoading(loadingId);
+
+              messageDiv = document.createElement('div');
+              messageDiv.className = 'chat-message assistant';
+              messageDiv.innerHTML = `
+                <div class="chat-message-role">Assistant</div>
+                <div class="chat-message-content"></div>
+              `;
+              messagesContainer.appendChild(messageDiv);
+              contentDiv = messageDiv.querySelector('.chat-message-content');
+            }
+
+            fullResponse += json.response;
+            // 스트리밍 중에는 일반 텍스트로 표시
+            contentDiv.textContent = fullResponse;
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          }
+        } catch (e) {
+          // JSON 파싱 실패 무시
+        }
+      }
+    }
+
+    // 스트리밍 완료 후 마크다운 렌더링 적용
+    if (contentDiv) {
+      contentDiv.innerHTML = renderMarkdown(fullResponse);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    // 최종 응답 저장
+    chatMessages.push({ role: 'assistant', content: fullResponse });
+
+    // 히스토리 파일 저장
+    await saveChatHistoryFiles(userQuestion, fullResponse);
+
+  } catch (error) {
+    // 에러 발생 시 로딩 제거하고 에러 메시지 표시
+    removeChatLoading(loadingId);
+
+    messageDiv = document.createElement('div');
+    messageDiv.className = 'chat-message assistant';
+    messageDiv.innerHTML = `
+      <div class="chat-message-role">Assistant</div>
+      <div class="chat-message-content" style="color: #f48771;">Error: ${error.message}</div>
+    `;
+    messagesContainer.appendChild(messageDiv);
+    throw error;
+  }
+}
+
+// HTML 이스케이프
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
