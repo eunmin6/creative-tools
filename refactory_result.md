@@ -18,7 +18,7 @@
 
 | 구분 | Before | After | 변화 |
 |------|--------|-------|------|
-| `renderer.js` | 5,967줄 | 3,897줄 | **-2,070줄 (35% 감소)** |
+| `renderer.js` | 5,967줄 | 3,341줄 | **-2,626줄 (44% 감소)** |
 
 ### 2.2 모듈화 결과
 
@@ -27,22 +27,26 @@
 | `public/js/constants.js` | 234줄 | 상수 및 전역 상태 관리 |
 | `public/js/modules/canvas-editor.js` | 1,182줄 | 캔버스 에디터 모듈 |
 | `public/js/modules/chat-panel.js` | 678줄 | AI Chat 패널 모듈 |
+| `public/js/modules/output-panel.js` | 168줄 | OUTPUT 패널 모듈 |
+| `public/js/modules/terminal.js` | 415줄 | 터미널 모듈 |
 | `public/js/app.js` | 53줄 | 앱 초기화 및 모듈 검증 |
-| **모듈 합계** | **2,147줄** | |
+| **모듈 합계** | **2,730줄** | |
 
 ### 2.3 전체 소스 파일 구조
 
 ```
 public/
-├── index.html                 1,531줄  (HTML + 인라인 CSS)
-├── renderer.js                3,897줄  (메인 렌더러 - 리팩토링 후)
+├── index.html                 1,533줄  (HTML + 인라인 CSS)
+├── renderer.js                3,341줄  (메인 렌더러 - 리팩토링 후)
 ├── codicon.css                  698줄  (VSCode 아이콘 스타일)
 └── js/
     ├── app.js                    53줄  (앱 초기화)
     ├── constants.js             234줄  (상수 및 AppState)
     └── modules/
         ├── canvas-editor.js   1,182줄  (캔버스 에디터)
-        └── chat-panel.js        678줄  (Chat 패널)
+        ├── chat-panel.js        678줄  (Chat 패널)
+        ├── output-panel.js      168줄  (OUTPUT 패널)
+        └── terminal.js          415줄  (터미널)
 
 src/
 ├── main.ts                      506줄  (Electron 메인 프로세스)
@@ -74,7 +78,6 @@ const AppState = {
   explorer: { /* 파일 탐색기 상태 */ },
   canvas: { /* 캔버스 상태 */ },
   chat: { /* Chat 상태 */ },
-  // ...
 };
 ```
 
@@ -94,15 +97,12 @@ const AppState = {
 **전역 노출 함수**:
 ```javascript
 window.openCanvasEditorForTab
-window.addRectangle
-window.addCircle
-window.addLine
+window.addRectangle / addCircle / addLine
 window.deleteSelectedShape
 window.saveCanvas
 window.handleCanvasKeyDown
 window.renderShapes
-window.getCanvasData
-window.setCanvasData
+window.getCanvasData / setCanvasData
 ```
 
 ### 3.3 chat-panel.js (678줄)
@@ -122,16 +122,56 @@ window.setCanvasData
 ```javascript
 window.initChat
 window.toggleChatPanel
-window.clearChatHistory
-window.resetChat
+window.clearChatHistory / resetChat
 window.handleChatKeydown
 window.sendChatMessage
 window.copyCodeBlock
-window.escapeHtml
-window.renderMarkdown
+window.escapeHtml / renderMarkdown
 ```
 
-### 3.4 app.js (53줄)
+### 3.4 output-panel.js (168줄)
+
+**역할**: OUTPUT 패널 기능 전담
+
+**주요 기능**:
+- Output 패널 토글
+- 출력 메시지 추가/클리어
+- 하단 패널 리사이저
+- Python 스크립트 실행
+
+**전역 노출 함수**:
+```javascript
+window.toggleOutputPanel
+window.toggleDevToolsFromMenu
+window.appendOutput / clearOutput
+window.setupBottomPanelResizer
+window.runPythonScript
+```
+
+### 3.5 terminal.js (415줄)
+
+**역할**: 터미널 기능 전담
+
+**주요 기능**:
+- 터미널 생성/삭제/전환
+- 명령어 입력 및 실행
+- Tab 자동완성
+- 출력 렌더링
+- 키보드 이벤트 처리
+
+**전역 노출 함수**:
+```javascript
+window.switchBottomTab
+window.createNewTerminal
+window.switchTerminal / closeTerminal
+window.killActiveTerminal / clearTerminal
+window.setupTerminalListeners
+window.handleTerminalKeyDown
+window.renderTerminalContent
+window.appendTerminalOutput
+```
+
+### 3.6 app.js (53줄)
 
 **역할**: 모듈 로드 확인 및 앱 초기화
 
@@ -173,6 +213,8 @@ window.renderMarkdown
 <script src="js/constants.js"></script>
 <script src="js/modules/canvas-editor.js"></script>
 <script src="js/modules/chat-panel.js"></script>
+<script src="js/modules/output-panel.js"></script>
+<script src="js/modules/terminal.js"></script>
 
 <!-- 3. 메인 렌더러 -->
 <script src="renderer.js"></script>
@@ -191,7 +233,7 @@ window.renderMarkdown
 
 ## 5. renderer.js 잔여 기능
 
-리팩토링 후 `renderer.js`에 남아있는 기능 (3,897줄):
+리팩토링 후 `renderer.js`에 남아있는 기능 (3,341줄):
 
 | 섹션 | 예상 라인 수 | 비고 |
 |------|-------------|------|
@@ -199,26 +241,21 @@ window.renderMarkdown
 | Monaco Editor 설정 | ~60줄 | |
 | 파일 탐색기 (Explorer) | ~1,330줄 | 향후 분리 후보 |
 | 탭 관리 | ~500줄 | 향후 분리 후보 |
-| 메뉴 & 다이얼로그 | ~450줄 | |
-| Testcase Sync | ~200줄 | |
-| Configuration | ~330줄 | |
-| Activity Bar & Sidebar | ~130줄 | |
+| 메뉴 & 다이얼로그 | ~1,000줄 | 향후 분리 후보 |
 | 모달 & 토스트 | ~130줄 | |
-| OUTPUT 패널 | ~140줄 | |
-| 터미널 | ~420줄 | |
+| Activity Bar & Sidebar | ~130줄 | |
 
 ---
 
 ## 6. 향후 개선 계획
 
-### 6.1 추가 모듈 분리 (권장)
+### 6.1 추가 모듈 분리 (선택적)
 
 | 우선순위 | 모듈 | 예상 라인 | 효과 |
 |---------|------|----------|------|
 | 1 | file-explorer.js | ~1,330줄 | 탐색기 로직 분리 |
 | 2 | tab-manager.js | ~500줄 | 탭 관리 로직 분리 |
-| 3 | terminal.js | ~420줄 | 터미널 로직 분리 |
-| 4 | menu-dialog.js | ~450줄 | 메뉴/다이얼로그 분리 |
+| 3 | menu-dialog.js | ~1,000줄 | 메뉴/다이얼로그 분리 |
 
 ### 6.2 CSS 분리
 
@@ -243,10 +280,23 @@ public/css/
 
 ### 달성 성과
 
-1. **코드 분리**: `renderer.js`에서 2,070줄(35%) 분리
-2. **모듈화**: 4개의 독립 모듈 생성
+1. **코드 분리**: `renderer.js`에서 2,626줄(44%) 분리
+2. **모듈화**: 6개의 독립 모듈 생성
 3. **캡슐화**: IIFE 패턴으로 내부 상태 보호
 4. **유지보수성**: 기능별 파일 분리로 코드 탐색 용이
+
+### 모듈별 라인 수 요약
+
+| 모듈 | 라인 수 |
+|------|---------|
+| renderer.js (핵심) | 3,341줄 |
+| canvas-editor.js | 1,182줄 |
+| chat-panel.js | 678줄 |
+| terminal.js | 415줄 |
+| constants.js | 234줄 |
+| output-panel.js | 168줄 |
+| app.js | 53줄 |
+| **총계** | **6,071줄** |
 
 ### 기대 효과
 
@@ -258,3 +308,4 @@ public/css/
 ---
 
 *Generated: 2024-12-22*
+*Updated: 2024-12-22 (추가 모듈 분리 완료)*
