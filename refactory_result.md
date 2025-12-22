@@ -12,27 +12,83 @@
 
 ---
 
-## 2. 리팩토링 성과
+## 2. 1차 리팩토링 (Phase 1)
 
-### 2.1 코드 라인 수 변화
+### 2.1 작업 내용
+- 핵심 UI 모듈 분리 (캔버스 에디터, Chat 패널)
+- 상수 및 상태 관리 모듈 생성
+
+### 2.2 코드 변화
 
 | 구분 | Before | After | 변화 |
 |------|--------|-------|------|
-| `renderer.js` | 5,967줄 | 3,341줄 | **-2,626줄 (44% 감소)** |
+| `renderer.js` | 5,967줄 | 3,897줄 | **-2,070줄 (35% 감소)** |
 
-### 2.2 모듈화 결과
+### 2.3 생성된 모듈
 
 | 파일 | 라인 수 | 설명 |
 |------|---------|------|
 | `public/js/constants.js` | 234줄 | 상수 및 전역 상태 관리 |
 | `public/js/modules/canvas-editor.js` | 1,182줄 | 캔버스 에디터 모듈 |
 | `public/js/modules/chat-panel.js` | 678줄 | AI Chat 패널 모듈 |
+| `public/js/app.js` | 53줄 | 앱 초기화 및 모듈 검증 |
+| **1차 모듈 합계** | **2,147줄** | |
+
+### 2.4 1차 리팩토링 커밋
+```
+d8fdb4e - refactor: Modularize renderer.js into separate modules
+```
+
+---
+
+## 3. 2차 리팩토링 (Phase 2)
+
+### 3.1 작업 내용
+- OUTPUT 패널 모듈 분리
+- 터미널 모듈 분리
+
+### 3.2 코드 변화
+
+| 구분 | Before (1차 후) | After | 변화 |
+|------|----------------|-------|------|
+| `renderer.js` | 3,897줄 | 3,341줄 | **-556줄 (추가 14% 감소)** |
+
+### 3.3 생성된 모듈
+
+| 파일 | 라인 수 | 설명 |
+|------|---------|------|
 | `public/js/modules/output-panel.js` | 168줄 | OUTPUT 패널 모듈 |
 | `public/js/modules/terminal.js` | 415줄 | 터미널 모듈 |
-| `public/js/app.js` | 53줄 | 앱 초기화 및 모듈 검증 |
-| **모듈 합계** | **2,730줄** | |
+| **2차 모듈 합계** | **583줄** | |
 
-### 2.3 전체 소스 파일 구조
+### 3.4 2차 리팩토링 커밋
+```
+40296f5 - refactor: Extract output-panel and terminal modules
+```
+
+---
+
+## 4. 전체 리팩토링 성과
+
+### 4.1 총 코드 변화
+
+| 구분 | 최초 | 최종 | 총 변화 |
+|------|------|------|---------|
+| `renderer.js` | 5,967줄 | 3,341줄 | **-2,626줄 (44% 감소)** |
+
+### 4.2 전체 모듈화 결과
+
+| 파일 | 라인 수 | 분리 단계 | 설명 |
+|------|---------|----------|------|
+| `constants.js` | 234줄 | 1차 | 상수 및 전역 상태 관리 |
+| `canvas-editor.js` | 1,182줄 | 1차 | 캔버스 에디터 모듈 |
+| `chat-panel.js` | 678줄 | 1차 | AI Chat 패널 모듈 |
+| `output-panel.js` | 168줄 | 2차 | OUTPUT 패널 모듈 |
+| `terminal.js` | 415줄 | 2차 | 터미널 모듈 |
+| `app.js` | 53줄 | 1차 | 앱 초기화 |
+| **모듈 총계** | **2,730줄** | | |
+
+### 4.3 전체 소스 파일 구조
 
 ```
 public/
@@ -43,10 +99,10 @@ public/
     ├── app.js                    53줄  (앱 초기화)
     ├── constants.js             234줄  (상수 및 AppState)
     └── modules/
-        ├── canvas-editor.js   1,182줄  (캔버스 에디터)
-        ├── chat-panel.js        678줄  (Chat 패널)
-        ├── output-panel.js      168줄  (OUTPUT 패널)
-        └── terminal.js          415줄  (터미널)
+        ├── canvas-editor.js   1,182줄  (캔버스 에디터) [1차]
+        ├── chat-panel.js        678줄  (Chat 패널) [1차]
+        ├── output-panel.js      168줄  (OUTPUT 패널) [2차]
+        └── terminal.js          415줄  (터미널) [2차]
 
 src/
 ├── main.ts                      506줄  (Electron 메인 프로세스)
@@ -55,13 +111,12 @@ src/
 
 ---
 
-## 3. 모듈 상세 설명
+## 5. 모듈 상세 설명
 
-### 3.1 constants.js (234줄)
+### 5.1 constants.js (234줄) - 1차
 
 **역할**: 애플리케이션 전역 상수 및 상태 관리
 
-**주요 내용**:
 ```javascript
 const Constants = {
   SYSTEM_FOLDERS: ['node_modules', 'dist', '.git', '.claude'],
@@ -81,7 +136,7 @@ const AppState = {
 };
 ```
 
-### 3.2 canvas-editor.js (1,182줄)
+### 5.2 canvas-editor.js (1,182줄) - 1차
 
 **역할**: 캔버스 에디터 기능 전담
 
@@ -105,7 +160,7 @@ window.renderShapes
 window.getCanvasData / setCanvasData
 ```
 
-### 3.3 chat-panel.js (678줄)
+### 5.3 chat-panel.js (678줄) - 1차
 
 **역할**: Ollama 기반 AI Chat 기능 전담
 
@@ -129,7 +184,7 @@ window.copyCodeBlock
 window.escapeHtml / renderMarkdown
 ```
 
-### 3.4 output-panel.js (168줄)
+### 5.4 output-panel.js (168줄) - 2차
 
 **역할**: OUTPUT 패널 기능 전담
 
@@ -148,7 +203,7 @@ window.setupBottomPanelResizer
 window.runPythonScript
 ```
 
-### 3.5 terminal.js (415줄)
+### 5.5 terminal.js (415줄) - 2차
 
 **역할**: 터미널 기능 전담
 
@@ -171,7 +226,7 @@ window.renderTerminalContent
 window.appendTerminalOutput
 ```
 
-### 3.6 app.js (53줄)
+### 5.6 app.js (53줄) - 1차
 
 **역할**: 모듈 로드 확인 및 앱 초기화
 
@@ -182,9 +237,9 @@ window.appendTerminalOutput
 
 ---
 
-## 4. 아키텍처 패턴
+## 6. 아키텍처 패턴
 
-### 4.1 모듈 패턴 (IIFE)
+### 6.1 모듈 패턴 (IIFE)
 
 각 모듈은 즉시 실행 함수(IIFE)로 감싸져 있어 내부 상태를 캡슐화합니다:
 
@@ -203,7 +258,7 @@ window.appendTerminalOutput
 })();
 ```
 
-### 4.2 스크립트 로드 순서
+### 6.2 스크립트 로드 순서
 
 ```html
 <!-- 1. Monaco Editor 로더 -->
@@ -223,7 +278,7 @@ window.appendTerminalOutput
 <script src="js/app.js"></script>
 ```
 
-### 4.3 모듈 간 통신
+### 6.3 모듈 간 통신
 
 - **전역 객체 사용**: `window.*` 네임스페이스를 통한 함수 노출
 - **상태 접근**: `window.AppState`, `window.Constants` 사용
@@ -231,7 +286,7 @@ window.appendTerminalOutput
 
 ---
 
-## 5. renderer.js 잔여 기능
+## 7. renderer.js 잔여 기능
 
 리팩토링 후 `renderer.js`에 남아있는 기능 (3,341줄):
 
@@ -247,9 +302,9 @@ window.appendTerminalOutput
 
 ---
 
-## 6. 향후 개선 계획
+## 8. 향후 개선 계획 (3차 리팩토링)
 
-### 6.1 추가 모듈 분리 (선택적)
+### 8.1 추가 모듈 분리 (선택적)
 
 | 우선순위 | 모듈 | 예상 라인 | 효과 |
 |---------|------|----------|------|
@@ -257,7 +312,7 @@ window.appendTerminalOutput
 | 2 | tab-manager.js | ~500줄 | 탭 관리 로직 분리 |
 | 3 | menu-dialog.js | ~1,000줄 | 메뉴/다이얼로그 분리 |
 
-### 6.2 CSS 분리
+### 8.2 CSS 분리
 
 현재 `index.html`에 인라인으로 작성된 CSS(약 1,200줄)를 외부 파일로 분리:
 
@@ -270,33 +325,35 @@ public/css/
 └── components.css     # 공통 컴포넌트 스타일
 ```
 
-### 6.3 상태 관리 개선
+### 8.3 상태 관리 개선
 
 `AppState` 객체를 활용한 중앙 집중식 상태 관리 강화
 
 ---
 
-## 7. 결론
+## 9. 결론
 
-### 달성 성과
+### 리팩토링 단계별 성과
 
-1. **코드 분리**: `renderer.js`에서 2,626줄(44%) 분리
-2. **모듈화**: 6개의 독립 모듈 생성
-3. **캡슐화**: IIFE 패턴으로 내부 상태 보호
-4. **유지보수성**: 기능별 파일 분리로 코드 탐색 용이
+| 단계 | renderer.js | 분리된 라인 | 생성 모듈 |
+|------|-------------|------------|----------|
+| 최초 | 5,967줄 | - | - |
+| 1차 후 | 3,897줄 | 2,070줄 (35%) | 4개 |
+| 2차 후 | 3,341줄 | 556줄 (추가 14%) | 2개 |
+| **최종** | **3,341줄** | **2,626줄 (44%)** | **6개** |
 
 ### 모듈별 라인 수 요약
 
-| 모듈 | 라인 수 |
-|------|---------|
-| renderer.js (핵심) | 3,341줄 |
-| canvas-editor.js | 1,182줄 |
-| chat-panel.js | 678줄 |
-| terminal.js | 415줄 |
-| constants.js | 234줄 |
-| output-panel.js | 168줄 |
-| app.js | 53줄 |
-| **총계** | **6,071줄** |
+| 모듈 | 라인 수 | 분리 단계 |
+|------|---------|----------|
+| renderer.js (핵심) | 3,341줄 | - |
+| canvas-editor.js | 1,182줄 | 1차 |
+| chat-panel.js | 678줄 | 1차 |
+| terminal.js | 415줄 | 2차 |
+| constants.js | 234줄 | 1차 |
+| output-panel.js | 168줄 | 2차 |
+| app.js | 53줄 | 1차 |
+| **총계** | **6,071줄** | |
 
 ### 기대 효과
 
@@ -308,4 +365,5 @@ public/css/
 ---
 
 *Generated: 2024-12-22*
-*Updated: 2024-12-22 (추가 모듈 분리 완료)*
+*1차 리팩토링: 2024-12-22 (canvas-editor, chat-panel, constants, app)*
+*2차 리팩토링: 2024-12-22 (output-panel, terminal)*
