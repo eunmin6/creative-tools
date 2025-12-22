@@ -1516,6 +1516,16 @@
     <script>
         require.config({ paths: { vs: 'vs' } });
     </script>
+
+    <!-- 모듈화된 스크립트 -->
+    <script src="js/constants.js"></script>
+    <script src="js/modules/canvas-editor.js"></script>
+    <script src="js/modules/chat-panel.js"></script>
+
+    <!-- 메인 렌더러 (나머지 기능) -->
     <script src="renderer.js"></script>
+
+    <!-- 앱 초기화 -->
+    <script src="js/app.js"></script>
 </body>
 </html>
