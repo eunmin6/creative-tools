@@ -15,8 +15,8 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #1e1e1e;
-            color: #cccccc;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             height: 100vh;
             overflow: hidden;
             display: flex;
@@ -26,13 +26,13 @@
         /* 커스텀 타이틀바 */
         .titlebar {
             height: 30px;
-            background: #323233;
+            background: var(--titlebar-bg);
             display: flex;
             align-items: center;
             justify-content: space-between;
             -webkit-app-region: drag;
             user-select: none;
-            border-bottom: 1px solid #2d2d2d;
+            border-bottom: 1px solid var(--border-color);
         }
 
         .titlebar-left {
@@ -43,7 +43,7 @@
 
         .titlebar-title {
             font-size: 12px;
-            color: #cccccc;
+            color: var(--text-primary);
             margin-left: 8px;
         }
 
@@ -61,13 +61,13 @@
         .titlebar-menu-item {
             padding: 4px 10px;
             font-size: 12px;
-            color: #cccccc;
+            color: var(--text-primary);
             cursor: pointer;
             transition: background 0.2s;
         }
 
         .titlebar-menu-item:hover {
-            background: #3e3e42;
+            background: var(--bg-hover);
         }
 
         /* 드롭다운 메뉴 */
@@ -80,8 +80,8 @@
             position: absolute;
             top: 100%;
             left: 0;
-            background: #252526;
-            border: 1px solid #454545;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
             min-width: 150px;
             z-index: 1000;
@@ -94,13 +94,13 @@
         .dropdown-item {
             padding: 8px 16px;
             font-size: 12px;
-            color: #cccccc;
+            color: var(--text-primary);
             cursor: pointer;
             transition: background 0.2s;
         }
 
         .dropdown-item:hover {
-            background: #094771;
+            background: var(--menu-hover);
         }
 
         .titlebar-controls {
@@ -117,7 +117,7 @@
             cursor: pointer;
             transition: background 0.2s;
             font-size: 10px;
-            color: #cccccc;
+            color: var(--text-primary);
         }
 
         .titlebar-button.maximize span {
@@ -127,7 +127,7 @@
         }
 
         .titlebar-button:hover {
-            background: #3e3e42;
+            background: var(--bg-hover);
         }
 
         .titlebar-button.close:hover {
@@ -146,12 +146,12 @@
         /* 왼쪽 아이콘 메뉴바 */
         .activity-bar {
             width: 48px;
-            background: #333333;
+            background: var(--activity-bar-bg);
             display: flex;
             flex-direction: column;
             align-items: center;
             padding: 10px 0;
-            border-right: 1px solid #2d2d2d;
+            border-right: 1px solid var(--border-color);
         }
 
         .activity-bar-item {
@@ -162,17 +162,17 @@
             justify-content: center;
             cursor: pointer;
             position: relative;
-            color: #858585;
+            color: var(--text-secondary);
             transition: color 0.2s;
             margin: 4px 0;
         }
 
         .activity-bar-item:hover {
-            color: #ffffff;
+            color: var(--button-text);
         }
 
         .activity-bar-item.active {
-            color: #ffffff;
+            color: var(--button-text);
         }
 
         .activity-bar-item.active::before {
@@ -199,10 +199,10 @@
         .sidebar {
             width: 250px;
             height: 100%;
-            background: #252526;
+            background: var(--bg-secondary);
             display: flex;
             flex-direction: column;
-            border-right: 1px solid #2d2d2d;
+            border-right: 1px solid var(--border-color);
             flex-shrink: 0;
             overflow: hidden;
         }
@@ -230,10 +230,10 @@
             font-size: 11px;
             font-weight: 600;
             text-transform: uppercase;
-            color: #cccccc;
+            color: var(--text-primary);
             letter-spacing: 0.5px;
-            background: #252526;
-            border-bottom: 1px solid #2d2d2d;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
         }
 
         .sidebar-content {
@@ -259,11 +259,11 @@
         }
 
         .sidebar-content:hover::-webkit-scrollbar-thumb {
-            background: #424242;
+            background: var(--scrollbar-thumb);
         }
 
         .sidebar-content:hover::-webkit-scrollbar-thumb:hover {
-            background: #555555;
+            background: var(--scrollbar-thumb);
         }
 
         /* 파일 트리 */
@@ -277,15 +277,15 @@
         }
 
         .tree-item:hover {
-            background: #2a2d2e;
+            background: var(--bg-hover);
         }
 
         .tree-item.selected {
-            background: #37373d;
+            background: var(--bg-tertiary);
         }
 
         .tree-item.multi-selected {
-            background: #094771;
+            background: var(--menu-hover);
         }
 
         .tree-item.multi-selected:hover {
@@ -301,7 +301,7 @@
 
         .tree-item-label {
             font-size: 13px;
-            color: #cccccc;
+            color: var(--text-primary);
         }
 
         .tree-item.folder {
@@ -325,14 +325,14 @@
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: #1e1e1e;
+            background: var(--bg-primary);
             overflow: hidden;
         }
 
         .editor-tabs {
             display: flex;
-            background: #2d2d2d;
-            border-bottom: 1px solid #2d2d2d;
+            background: var(--tab-inactive-bg);
+            border-bottom: 1px solid var(--border-color);
             min-height: 35px;
             overflow-x: auto;
             overflow-y: hidden;
@@ -340,8 +340,8 @@
 
         .editor-tab {
             padding: 8px 20px;
-            background: #2d2d2d;
-            border-right: 1px solid #1e1e1e;
+            background: var(--tab-inactive-bg);
+            border-right: 1px solid var(--border-color);
             cursor: pointer;
             font-size: 13px;
             color: #969696;
@@ -353,13 +353,13 @@
         }
 
         .editor-tab.active {
-            background: #1e1e1e;
-            color: #ffffff;
+            background: var(--bg-primary);
+            color: var(--button-text);
             border-top: 2px solid #007acc;
         }
 
         .editor-tab:hover {
-            color: #ffffff;
+            color: var(--button-text);
         }
 
         .editor-area {
@@ -382,13 +382,13 @@
 
         .welcome-screen h1 {
             font-size: 36px;
-            color: #cccccc;
+            color: var(--text-primary);
             margin-bottom: 20px;
         }
 
         .welcome-screen p {
             font-size: 14px;
-            color: #858585;
+            color: var(--text-secondary);
             margin-bottom: 10px;
         }
 
@@ -399,11 +399,11 @@
         }
 
         ::-webkit-scrollbar-track {
-            background: #1e1e1e;
+            background: var(--bg-primary);
         }
 
         ::-webkit-scrollbar-thumb {
-            background: #424242;
+            background: var(--scrollbar-thumb);
             border-radius: 5px;
         }
 
@@ -427,7 +427,7 @@
         }
 
         .editor-tabs:hover::-webkit-scrollbar-thumb {
-            background: #555555;
+            background: var(--scrollbar-thumb);
         }
 
         .editor-tabs:hover::-webkit-scrollbar-thumb:hover {
@@ -465,8 +465,8 @@
         }
 
         .modal {
-            background: #252526;
-            border: 1px solid #454545;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
             min-width: 400px;
             max-width: 600px;
@@ -474,33 +474,33 @@
 
         .modal-header {
             padding: 12px 16px;
-            background: #2d2d30;
-            color: #cccccc;
+            background: var(--panel-bg);
+            color: var(--text-primary);
             font-size: 13px;
             font-weight: 600;
-            border-bottom: 1px solid #454545;
+            border-bottom: 1px solid var(--border-color);
         }
 
         .modal-body {
             padding: 20px 16px;
-            color: #cccccc;
+            color: var(--text-primary);
             font-size: 13px;
             line-height: 1.6;
         }
 
         .modal-footer {
             padding: 12px 16px;
-            background: #2d2d30;
+            background: var(--panel-bg);
             display: flex;
             justify-content: flex-end;
             gap: 8px;
-            border-top: 1px solid #454545;
+            border-top: 1px solid var(--border-color);
         }
 
         .modal-button {
             padding: 6px 14px;
             background: #0e639c;
-            color: #ffffff;
+            color: var(--button-text);
             border: 1px solid #0e639c;
             border-radius: 2px;
             font-size: 13px;
@@ -513,23 +513,23 @@
         }
 
         .modal-button.secondary {
-            background: #3c3c3c;
-            border: 1px solid #3c3c3c;
-            color: #cccccc;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
         }
 
         .modal-button.secondary:hover {
-            background: #505050;
+            background: var(--bg-tertiary);
         }
 
         .modal-button.danger {
             background: transparent;
-            border: 1px solid #3c3c3c;
-            color: #cccccc;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
         }
 
         .modal-button.danger:hover {
-            background: #505050;
+            background: var(--bg-tertiary);
         }
 
         /* VSCode 스타일 토스트 알림 */
@@ -544,8 +544,8 @@
         }
 
         .toast {
-            background: #252526;
-            border: 1px solid #454545;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
             border-left: 3px solid #007acc;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
             padding: 12px 16px;
@@ -577,7 +577,7 @@
         .toast-message {
             flex: 1;
             font-size: 13px;
-            color: #cccccc;
+            color: var(--text-primary);
             line-height: 1.4;
         }
 
@@ -588,14 +588,14 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            color: #858585;
+            color: var(--text-secondary);
             font-size: 16px;
             flex-shrink: 0;
             transition: color 0.2s;
         }
 
         .toast-close:hover {
-            color: #cccccc;
+            color: var(--text-primary);
         }
 
         @keyframes slideIn {
@@ -630,8 +630,8 @@
             position: fixed;
             top: 70px;
             left: 310px;
-            background: #252526;
-            border: 1px solid #454545;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
             border-radius: 3px;
             padding: 6px;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
@@ -658,15 +658,15 @@
         }
 
         .color-option.selected {
-            border-color: #ffffff;
+            border-color: var(--button-text);
             box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
         }
 
         /* 파일 컨텍스트 메뉴 */
         .file-context-menu {
             position: fixed;
-            background: #252526;
-            border: 1px solid #454545;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
             border-radius: 6px;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
             min-width: 200px;
@@ -680,13 +680,13 @@
             gap: 12px;
             padding: 8px 16px;
             font-size: 13px;
-            color: #cccccc;
+            color: var(--text-primary);
             cursor: pointer;
             transition: background 0.1s;
         }
 
         .context-menu-item:hover {
-            background: #094771;
+            background: var(--menu-hover);
         }
 
         .context-menu-item.danger:hover {
@@ -711,7 +711,7 @@
 
         .context-menu-shortcut {
             font-size: 12px;
-            color: #858585;
+            color: var(--text-secondary);
             margin-left: auto;
         }
 
@@ -719,7 +719,7 @@
         .bottom-panel {
             display: none;
             flex-direction: column;
-            background: #1e1e1e;
+            background: var(--bg-primary);
             min-height: 150px;
             max-height: 50vh;
         }
@@ -730,7 +730,7 @@
 
         .bottom-panel-resizer {
             height: 3px;
-            background: #3c3c3c;
+            background: var(--input-bg);
             cursor: row-resize;
             flex-shrink: 0;
             transition: background 0.2s;
@@ -748,7 +748,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: #1e1e1e;
+            background: var(--bg-primary);
             padding: 0 10px;
             height: 26px;
             flex-shrink: 0;
@@ -757,7 +757,7 @@
         .bottom-panel-tabs {
             display: flex;
             height: 100%;
-            border-bottom: 1px solid #3c3c3c;
+            border-bottom: 1px solid var(--border-color);
             margin-bottom: 4px;
         }
 
@@ -765,7 +765,7 @@
             padding: 0 10px;
             font-size: 11px;
             text-transform: uppercase;
-            color: #858585;
+            color: var(--text-secondary);
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -775,7 +775,7 @@
         }
 
         .bottom-panel-tab:hover {
-            color: #cccccc;
+            color: var(--text-primary);
         }
 
         .bottom-panel-tab.active {
@@ -796,15 +796,15 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            color: #858585;
+            color: var(--text-secondary);
             border-radius: 3px;
             transition: all 0.2s;
             font-size: 14px;
         }
 
         .bottom-panel-action:hover {
-            color: #ffffff;
-            background: #3e3e42;
+            color: var(--button-text);
+            background: var(--bg-hover);
         }
 
         .bottom-panel-action .codicon {
@@ -818,8 +818,8 @@
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
             font-size: 12px;
             line-height: 1.4;
-            color: #cccccc;
-            background: #1e1e1e;
+            color: var(--text-primary);
+            background: var(--bg-primary);
         }
 
         .output-line {
@@ -864,8 +864,8 @@
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
             font-size: 12px;
             line-height: 1.4;
-            color: #cccccc;
-            background: #1e1e1e;
+            color: var(--text-primary);
+            background: var(--bg-primary);
             cursor: text;
         }
 
@@ -902,8 +902,8 @@
         /* 터미널 인스턴스 사이드바 */
         .terminal-sidebar {
             width: 140px;
-            background: #252526;
-            border-left: 1px solid #3c3c3c;
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
         }
@@ -920,21 +920,21 @@
             padding: 4px 8px;
             cursor: pointer;
             font-size: 12px;
-            color: #cccccc;
+            color: var(--text-primary);
             gap: 6px;
         }
 
         .terminal-item:hover {
-            background: #2a2d2e;
+            background: var(--bg-hover);
         }
 
         .terminal-item.active {
-            background: #37373d;
+            background: var(--bg-tertiary);
         }
 
         .terminal-item-icon {
             font-size: 14px;
-            color: #858585;
+            color: var(--text-secondary);
         }
 
         .terminal-item-name {
@@ -950,7 +950,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #858585;
+            color: var(--text-secondary);
             font-size: 14px;
             border-radius: 3px;
             opacity: 0;
@@ -961,8 +961,8 @@
         }
 
         .terminal-item-close:hover {
-            color: #ffffff;
-            background: #3e3e42;
+            color: var(--button-text);
+            background: var(--bg-hover);
         }
 
         /* 에디터 + 패널 컨테이너 */
@@ -987,7 +987,7 @@
             width: 350px;
             min-width: 280px;
             max-width: 1600px;
-            background: #252526;
+            background: var(--bg-secondary);
             display: flex;
             flex-direction: column;
             flex-shrink: 0;
@@ -1015,20 +1015,20 @@
             justify-content: space-between;
             align-items: center;
             padding: 4px 12px;
-            background: #2d2d30;
-            border-bottom: 1px solid #3c3c3c;
-            color: #cccccc;
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
             font-size: 11px;
         }
 
         .chat-panel-actions {
             display: flex;
             gap: 8px;
-            color: #858585;
+            color: var(--text-secondary);
         }
 
         .chat-panel-actions span:hover {
-            color: #ffffff;
+            color: var(--button-text);
         }
 
         .chat-messages {
@@ -1043,7 +1043,7 @@
         .chat-welcome {
             text-align: center;
             padding: 40px 20px;
-            color: #cccccc;
+            color: var(--text-primary);
         }
 
         .chat-message {
@@ -1072,27 +1072,27 @@
 
         .chat-message.user .chat-message-content {
             background: #0e639c;
-            color: #ffffff;
+            color: var(--button-text);
             border-bottom-right-radius: 4px;
         }
 
         .chat-message.assistant .chat-message-content {
             max-width: 100%;
             background: transparent;
-            color: #cccccc;
+            color: var(--text-primary);
             padding: 8px 0;
             border-radius: 0;
         }
 
         .chat-message-role {
             font-size: 11px;
-            color: #858585;
+            color: var(--text-secondary);
             padding: 0 4px;
         }
 
         .chat-input-area {
             padding: 0;
-            background: #1e1e1e;
+            background: var(--bg-primary);
         }
 
         .chat-attachments {
@@ -1109,17 +1109,17 @@
             display: flex;
             align-items: center;
             gap: 4px;
-            background: #2d2d30;
+            background: var(--panel-bg);
             padding: 3px 8px;
             border-radius: 4px;
             font-size: 11px;
-            color: #cccccc;
+            color: var(--text-primary);
             cursor: pointer;
             transition: background 0.15s;
         }
 
         .chat-attachment-item:hover {
-            background: #3c3c3c;
+            background: var(--input-bg);
         }
 
         .chat-attachment-item input[type="checkbox"] {
@@ -1132,7 +1132,7 @@
 
         .chat-attachment-item .file-icon {
             font-size: 12px;
-            color: #858585;
+            color: var(--text-secondary);
         }
 
         .chat-attachment-item.checked {
@@ -1152,7 +1152,7 @@
             flex: 1;
             background: transparent;
             border: none;
-            color: #cccccc;
+            color: var(--text-primary);
             padding: 8px 0;
             font-size: 13px;
             font-family: 'Segoe UI', sans-serif;
@@ -1175,7 +1175,7 @@
             background: transparent;
             border: none;
             border-radius: 6px;
-            color: #858585;
+            color: var(--text-secondary);
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -1185,8 +1185,8 @@
         }
 
         .chat-send-btn:hover {
-            background: #3c3c3c;
-            color: #ffffff;
+            background: var(--input-bg);
+            color: var(--button-text);
         }
 
         .chat-send-btn:disabled {
@@ -1206,7 +1206,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            color: #858585;
+            color: var(--text-secondary);
             font-size: 12px;
         }
 
@@ -1336,7 +1336,7 @@
                         <div class="welcome-screen" style="align-items: flex-start; justify-content: flex-start; padding: 40px 60px; font-family: 'Segoe UI', sans-serif;">
                             <h1 style="font-size: 36px; font-weight: 600; margin-bottom: 40px;">Virtual Validation Tools</h1>
                             <div style="text-align: left;">
-                                <h2 style="font-size: 16px; font-weight: 600; color: #858585; text-transform: uppercase; margin-bottom: 12px;">Start</h2>
+                                <h2 style="font-size: 16px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 12px;">Start</h2>
                                 <div class="welcome-link" onclick="openFolder()" style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 0; color: #3794ff; transition: color 0.2s; font-size: 14px;">
                                     <i class="codicon codicon-folder-opened" style="font-size: 16px;"></i>
                                     <span>Open Folder...</span>
@@ -1399,7 +1399,7 @@
             <div class="chat-messages" id="chatMessages">
                 <div class="chat-welcome">
                     <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">Welcome to Chat</div>
-                    <div style="color: #858585;">Ask me anything about your project or code.</div>
+                    <div style="color: var(--text-secondary);">Ask me anything about your project or code.</div>
                 </div>
             </div>
             <div class="chat-input-area">
@@ -1413,8 +1413,8 @@
                     </button>
                 </div>
                 <div class="chat-options" style="padding: 6px 12px; border-top: 1px solid #2d2d30;">
-                    <span style="color: #858585; font-size: 11px;">Model:</span>
-                    <select id="llmSelect" style="background: #2d2d30; color: #cccccc; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
+                    <span style="color: var(--text-secondary); font-size: 11px;">Model:</span>
+                    <select id="llmSelect" style="background: var(--panel-bg); color: var(--text-primary); border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
                         <option value="gpt-oss:20b">gpt-oss:20b</option>
                     </select>
                 </div>

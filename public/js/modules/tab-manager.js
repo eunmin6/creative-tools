@@ -546,6 +546,7 @@
     openTabs.push(tabConfig);
     activeTabIndex = openTabs.length - 1;
     renderTabs();
+    renderActiveTabContent(); // 탭 컨텐츠도 렌더링
     return activeTabIndex;
   }
 
