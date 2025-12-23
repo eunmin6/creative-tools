@@ -92,7 +92,7 @@ d8fdb4e - refactor: Modularize renderer.js into separate modules
 
 ### 4.4 3차 리팩토링 커밋
 ```
-(pending)
+80ffadd - refactor: Phase 3 - Extract file-explorer, tab-manager, menu-dialog modules
 ```
 
 ---
