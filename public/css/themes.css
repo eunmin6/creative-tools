@@ -498,6 +498,64 @@ input:focus, textarea:focus, select:focus {
   color: var(--info);
 }
 
+/* ===== Appearance 액션 버튼 ===== */
+.appearance-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+.appearance-btn {
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.appearance-btn.primary {
+  background-color: var(--accent-primary);
+  color: var(--button-text);
+}
+
+.appearance-btn.primary:hover {
+  background-color: var(--accent-hover);
+}
+
+.appearance-btn.secondary {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.appearance-btn.secondary:hover {
+  background-color: var(--bg-hover);
+}
+
+/* 테마 카드 선택 상태 */
+.theme-card.selected {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.theme-card.selected:not(.active)::after {
+  content: 'Preview';
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--accent-primary);
+  color: var(--button-text);
+  border-radius: var(--radius-sm);
+}
+
 /* ===== 라이트 테마 특수 처리 ===== */
 body.theme-light {
   color-scheme: light;

@@ -10,15 +10,17 @@
   const DEFAULT_THEME = 'vscode-dark';
 
   let currentTheme = DEFAULT_THEME;
+  let selectedTheme = DEFAULT_THEME; // 선택된 테마 (미적용 상태)
 
   // ===== 테마 적용 =====
 
   /**
-   * 테마 적용
+   * 테마 적용 (미리보기용, 저장 안함)
    * @param {string} themeId - 테마 ID
+   * @param {boolean} save - 저장 여부
    * @returns {boolean} - 성공 여부
    */
-  function applyTheme(themeId) {
+  function applyTheme(themeId, save = true) {
     if (!window.Themes) {
       console.error('Themes not loaded');
       return false;
@@ -45,19 +47,25 @@
     document.body.dataset.theme = themeId;
     document.body.dataset.themeType = theme.type;
 
-    // 현재 테마 저장
-    currentTheme = themeId;
-    localStorage.setItem(STORAGE_KEY, themeId);
-
     // Monaco Editor 테마 변경
     updateMonacoTheme(theme.type);
 
-    // 테마 변경 이벤트 발생
-    window.dispatchEvent(new CustomEvent('themechange', {
-      detail: { themeId, theme }
-    }));
+    if (save) {
+      // 현재 테마 저장
+      currentTheme = themeId;
+      selectedTheme = themeId;
+      localStorage.setItem(STORAGE_KEY, themeId);
 
-    console.log(`Theme applied: ${theme.name}`);
+      // 테마 변경 이벤트 발생
+      window.dispatchEvent(new CustomEvent('themechange', {
+        detail: { themeId, theme }
+      }));
+
+      console.log(`Theme applied and saved: ${theme.name}`);
+    } else {
+      console.log(`Theme preview: ${theme.name}`);
+    }
+
     return true;
   }
 
@@ -82,9 +90,13 @@
   function loadSavedTheme() {
     const savedTheme = localStorage.getItem(STORAGE_KEY);
     if (savedTheme && window.Themes && window.Themes[savedTheme]) {
-      applyTheme(savedTheme);
+      currentTheme = savedTheme;
+      selectedTheme = savedTheme;
+      applyTheme(savedTheme, false);
     } else {
-      applyTheme(DEFAULT_THEME);
+      currentTheme = DEFAULT_THEME;
+      selectedTheme = DEFAULT_THEME;
+      applyTheme(DEFAULT_THEME, false);
     }
   }
 
@@ -141,13 +153,15 @@
     const editorArea = document.querySelector('.editor-area');
     if (!editorArea) return;
 
+    // 선택된 테마를 현재 테마로 초기화
+    selectedTheme = currentTheme;
+
     const themes = getThemeList();
-    const current = getCurrentTheme();
 
     const themeCards = themes.map(theme => `
-      <div class="theme-card ${theme.id === current ? 'active' : ''}"
+      <div class="theme-card ${theme.id === currentTheme ? 'active selected' : ''}"
            data-theme-id="${theme.id}"
-           onclick="selectTheme('${theme.id}')">
+           onclick="previewTheme('${theme.id}')">
         <div class="theme-preview theme-preview-${theme.id}">
           <div class="preview-titlebar"></div>
           <div class="preview-content">
@@ -164,7 +178,7 @@
           <div class="theme-description">${theme.description}</div>
         </div>
         <div class="theme-check">
-          ${theme.id === current ? '<span class="codicon codicon-check"></span>' : ''}
+          ${theme.id === currentTheme ? '<span class="codicon codicon-check"></span>' : ''}
         </div>
         <div class="theme-badge ${theme.type}">${theme.type === 'light' ? 'Light' : 'Dark'}</div>
       </div>
@@ -179,10 +193,14 @@
         <div class="theme-grid">
           ${themeCards}
         </div>
+        <div class="appearance-actions">
+          <button class="appearance-btn secondary" onclick="cancelThemeChange()">Cancel</button>
+          <button class="appearance-btn primary" onclick="confirmThemeChange()">Apply Theme</button>
+        </div>
         <div class="appearance-footer">
           <p class="theme-hint">
             <span class="codicon codicon-info"></span>
-            Theme changes are saved automatically and will persist across sessions.
+            Click a theme to preview, then click "Apply Theme" to save your choice.
           </p>
         </div>
       </div>
@@ -190,27 +208,96 @@
   }
 
   /**
-   * 테마 선택
+   * 테마 미리보기 (선택만, 저장 안함)
    * @param {string} themeId
    */
-  function selectTheme(themeId) {
-    if (applyTheme(themeId)) {
-      // 선택 UI 업데이트
+  function previewTheme(themeId) {
+    selectedTheme = themeId;
+
+    // 미리보기 적용 (저장 안함)
+    applyTheme(themeId, false);
+
+    // 선택 UI 업데이트
+    document.querySelectorAll('.theme-card').forEach(card => {
+      const isSelected = card.dataset.themeId === themeId;
+      const isApplied = card.dataset.themeId === currentTheme;
+
+      card.classList.toggle('selected', isSelected);
+      card.classList.toggle('active', isApplied);
+
+      const checkEl = card.querySelector('.theme-check');
+      if (checkEl) {
+        checkEl.innerHTML = isApplied ? '<span class="codicon codicon-check"></span>' : '';
+      }
+    });
+  }
+
+  /**
+   * 테마 변경 확정
+   */
+  function confirmThemeChange() {
+    if (selectedTheme && selectedTheme !== currentTheme) {
+      // 테마 저장
+      currentTheme = selectedTheme;
+      localStorage.setItem(STORAGE_KEY, currentTheme);
+
+      // UI 업데이트
       document.querySelectorAll('.theme-card').forEach(card => {
-        const isActive = card.dataset.themeId === themeId;
-        card.classList.toggle('active', isActive);
+        const isApplied = card.dataset.themeId === currentTheme;
+        card.classList.toggle('active', isApplied);
+
         const checkEl = card.querySelector('.theme-check');
         if (checkEl) {
-          checkEl.innerHTML = isActive ? '<span class="codicon codicon-check"></span>' : '';
+          checkEl.innerHTML = isApplied ? '<span class="codicon codicon-check"></span>' : '';
         }
       });
 
+      // 테마 변경 이벤트 발생
+      window.dispatchEvent(new CustomEvent('themechange', {
+        detail: { themeId: currentTheme, theme: window.Themes[currentTheme] }
+      }));
+
       // 토스트 알림
       if (typeof window.showToast === 'function') {
-        const themeName = window.Themes[themeId]?.name || themeId;
-        window.showToast('success', `Theme changed to ${themeName}`);
+        const themeName = window.Themes[currentTheme]?.name || currentTheme;
+        window.showToast('success', `Theme applied: ${themeName}`);
+      }
+    } else if (selectedTheme === currentTheme) {
+      if (typeof window.showToast === 'function') {
+        window.showToast('info', 'This theme is already applied.');
       }
     }
+  }
+
+  /**
+   * 테마 변경 취소
+   */
+  function cancelThemeChange() {
+    if (selectedTheme !== currentTheme) {
+      // 원래 테마로 복원
+      selectedTheme = currentTheme;
+      applyTheme(currentTheme, false);
+
+      // UI 업데이트
+      document.querySelectorAll('.theme-card').forEach(card => {
+        const isApplied = card.dataset.themeId === currentTheme;
+        card.classList.remove('selected');
+        card.classList.toggle('active', isApplied);
+      });
+
+      if (typeof window.showToast === 'function') {
+        window.showToast('info', 'Theme change cancelled.');
+      }
+    }
+  }
+
+  /**
+   * 테마 선택 (즉시 적용 - 하위 호환성)
+   * @param {string} themeId
+   */
+  function selectTheme(themeId) {
+    previewTheme(themeId);
+    confirmThemeChange();
   }
 
   // ===== 초기화 =====
@@ -231,6 +318,9 @@
   window.getThemeList = getThemeList;
   window.openAppearanceTab = openAppearanceTab;
   window.renderAppearanceTab = renderAppearanceTab;
+  window.previewTheme = previewTheme;
   window.selectTheme = selectTheme;
+  window.confirmThemeChange = confirmThemeChange;
+  window.cancelThemeChange = cancelThemeChange;
 
 })();
