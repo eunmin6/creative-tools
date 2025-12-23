@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Virtual Validation Tools</title>
     <link rel="stylesheet" href="codicon.css">
+    <link rel="stylesheet" href="css/themes.css">
     <style>
         * {
             margin: 0;
@@ -1264,6 +1265,11 @@
                             <span style="display: inline-block; width: 16px;"></span>
                             Developer Tools
                         </div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-item" onclick="openAppearanceTab(); closeAllMenus();">
+                            <span style="display: inline-block; width: 16px;"></span>
+                            Appearance
+                        </div>
                     </div>
                 </div>
                 <div class="titlebar-menu-item">Go</div>
@@ -1519,9 +1525,11 @@
 
     <!-- 모듈화된 스크립트 -->
     <script src="js/constants.js"></script>
+    <script src="js/themes/themes.js"></script>
     <script src="js/modules/file-explorer.js"></script>
     <script src="js/modules/tab-manager.js"></script>
     <script src="js/modules/menu-dialog.js"></script>
+    <script src="js/modules/theme-manager.js"></script>
     <script src="js/modules/canvas-editor.js"></script>
     <script src="js/modules/chat-panel.js"></script>
     <script src="js/modules/output-panel.js"></script>

@@ -395,6 +395,10 @@
       if (typeof window.renderCategoryViewer === 'function') {
         window.renderCategoryViewer(tab);
       }
+    } else if (tab.type === 'appearance') {
+      if (typeof window.renderAppearanceTab === 'function') {
+        window.renderAppearanceTab();
+      }
     } else {
       // Monaco 에디터로 텍스트 파일 편집
       editorArea.innerHTML = '<div id="monaco-container" style="width: 100%; height: 100%;"></div>';

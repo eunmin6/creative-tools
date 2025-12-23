@@ -1,0 +1,517 @@
+/**
+ * Theme System CSS
+ * CSS 변수 및 Appearance 탭 스타일
+ */
+
+/* ===== CSS 변수 기본값 (VSCode Dark) ===== */
+:root {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-tertiary: #333333;
+  --bg-hover: #2a2d2e;
+  --text-primary: #cccccc;
+  --text-secondary: #858585;
+  --accent-primary: #0e639c;
+  --accent-hover: #1177bb;
+  --border-color: #3c3c3c;
+  --scrollbar-bg: #1e1e1e;
+  --scrollbar-thumb: #424242;
+  --tab-active-bg: #1e1e1e;
+  --tab-inactive-bg: #2d2d2d;
+  --tab-border: #252526;
+  --sidebar-bg: #252526;
+  --titlebar-bg: #3c3c3c;
+  --panel-bg: #1e1e1e;
+  --input-bg: #3c3c3c;
+  --input-border: #3c3c3c;
+  --button-bg: #0e639c;
+  --button-hover: #1177bb;
+  --button-text: #ffffff;
+  --dropdown-bg: #252526;
+  --dropdown-hover: #094771;
+  --menu-bg: #252526;
+  --menu-hover: #094771;
+  --context-menu-bg: #252526;
+  --context-menu-hover: #094771;
+  --modal-bg: #252526;
+  --toast-bg: #252526;
+  --success: #4ec9b0;
+  --warning: #dcdcaa;
+  --error: #f14c4c;
+  --info: #3794ff;
+  --file-icon-color: #cccccc;
+  --folder-icon-color: #dcb67a;
+  --activity-bar-bg: #333333;
+  --activity-bar-active: #ffffff;
+  --activity-bar-inactive: #858585;
+  --status-bar-bg: #007acc;
+  --status-bar-text: #ffffff;
+
+  /* 공통 변수 */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --transition-fast: 0.1s ease;
+  --transition-normal: 0.2s ease;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* ===== 전역 테마 적용 ===== */
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color var(--transition-normal), color var(--transition-normal);
+}
+
+/* Title Bar */
+.titlebar {
+  background-color: var(--titlebar-bg);
+}
+
+.titlebar .title {
+  color: var(--text-primary);
+}
+
+/* Menus */
+.menu-bar .menu-item {
+  color: var(--text-primary);
+}
+
+.menu-bar .menu-item:hover {
+  background-color: var(--bg-hover);
+}
+
+.dropdown-menu {
+  background-color: var(--menu-bg);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-md);
+}
+
+.dropdown-item {
+  color: var(--text-primary);
+}
+
+.dropdown-item:hover {
+  background-color: var(--menu-hover);
+}
+
+.dropdown-divider {
+  border-color: var(--border-color);
+}
+
+/* Activity Bar */
+.activity-bar {
+  background-color: var(--activity-bar-bg);
+}
+
+.activity-bar-item {
+  color: var(--activity-bar-inactive);
+}
+
+.activity-bar-item:hover,
+.activity-bar-item.active {
+  color: var(--activity-bar-active);
+}
+
+/* Sidebar */
+.sidebar {
+  background-color: var(--sidebar-bg);
+  border-color: var(--border-color);
+}
+
+.sidebar-header {
+  color: var(--text-secondary);
+}
+
+/* File Tree */
+.tree-item {
+  color: var(--text-primary);
+}
+
+.tree-item:hover {
+  background-color: var(--bg-hover);
+}
+
+.tree-item.selected {
+  background-color: var(--accent-primary);
+}
+
+.tree-item .codicon {
+  color: var(--file-icon-color);
+}
+
+.tree-item.folder > .tree-label .codicon {
+  color: var(--folder-icon-color);
+}
+
+/* Tabs */
+.tab-bar {
+  background-color: var(--bg-secondary);
+  border-color: var(--tab-border);
+}
+
+.tab {
+  background-color: var(--tab-inactive-bg);
+  color: var(--text-secondary);
+  border-color: var(--tab-border);
+}
+
+.tab:hover {
+  background-color: var(--bg-hover);
+}
+
+.tab.active {
+  background-color: var(--tab-active-bg);
+  color: var(--text-primary);
+}
+
+.tab .close-btn:hover {
+  background-color: var(--bg-hover);
+}
+
+/* Editor Content */
+#editorContent {
+  background-color: var(--bg-primary);
+}
+
+/* Bottom Panel */
+.bottom-panel {
+  background-color: var(--panel-bg);
+  border-color: var(--border-color);
+}
+
+.bottom-panel-tabs .panel-tab {
+  color: var(--text-secondary);
+}
+
+.bottom-panel-tabs .panel-tab:hover {
+  color: var(--text-primary);
+}
+
+.bottom-panel-tabs .panel-tab.active {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+
+/* Terminal */
+.terminal-container {
+  background-color: var(--bg-primary);
+}
+
+.terminal-input {
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  border-color: var(--input-border);
+}
+
+/* Context Menu */
+.context-menu {
+  background-color: var(--context-menu-bg);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-md);
+}
+
+.context-menu-item {
+  color: var(--text-primary);
+}
+
+.context-menu-item:hover {
+  background-color: var(--context-menu-hover);
+}
+
+/* Modal */
+.modal-overlay .modal-content {
+  background-color: var(--modal-bg);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-lg);
+}
+
+.modal-header {
+  color: var(--text-primary);
+}
+
+.modal-body {
+  color: var(--text-secondary);
+}
+
+/* Buttons */
+.modal-btn {
+  background-color: var(--button-bg);
+  color: var(--button-text);
+}
+
+.modal-btn:hover {
+  background-color: var(--button-hover);
+}
+
+.modal-btn.secondary {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.modal-btn.secondary:hover {
+  background-color: var(--bg-hover);
+}
+
+/* Toast */
+.toast {
+  background-color: var(--toast-bg);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.toast.success .toast-icon { color: var(--success); }
+.toast.error .toast-icon { color: var(--error); }
+.toast.warning .toast-icon { color: var(--warning); }
+.toast.info .toast-icon { color: var(--info); }
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary);
+}
+
+/* Input fields */
+input, textarea, select {
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  border-color: var(--input-border);
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent-primary);
+}
+
+/* ===== Appearance 탭 스타일 ===== */
+.appearance-container {
+  padding: 40px;
+  max-width: 1200px;
+  margin: 0 auto;
+  min-height: 100%;
+}
+
+.appearance-header {
+  margin-bottom: 32px;
+}
+
+.appearance-header h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+}
+
+.appearance-header p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* 테마 그리드 */
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+/* 테마 카드 */
+.theme-card {
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  position: relative;
+}
+
+.theme-card:hover {
+  border-color: var(--accent-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.theme-card.active {
+  border-color: var(--accent-primary);
+  background: var(--bg-tertiary);
+}
+
+/* 테마 프리뷰 */
+.theme-preview {
+  height: 120px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.preview-titlebar {
+  height: 20px;
+}
+
+.preview-content {
+  display: flex;
+  height: calc(100% - 20px);
+}
+
+.preview-sidebar {
+  width: 36px;
+}
+
+.preview-editor {
+  flex: 1;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.preview-line {
+  height: 6px;
+  border-radius: 2px;
+  opacity: 0.3;
+}
+
+.preview-line.short {
+  width: 60%;
+}
+
+/* 각 테마별 프리뷰 색상 */
+.theme-preview-vscode-dark .preview-titlebar { background: #3c3c3c; }
+.theme-preview-vscode-dark .preview-sidebar { background: #252526; }
+.theme-preview-vscode-dark .preview-editor { background: #1e1e1e; }
+.theme-preview-vscode-dark .preview-line { background: #cccccc; }
+
+.theme-preview-notion-light .preview-titlebar { background: #ffffff; border-bottom: 1px solid #e9e9e7; }
+.theme-preview-notion-light .preview-sidebar { background: #f7f6f3; }
+.theme-preview-notion-light .preview-editor { background: #ffffff; }
+.theme-preview-notion-light .preview-line { background: #37352f; }
+
+.theme-preview-figma-dark .preview-titlebar { background: #2c2c2c; }
+.theme-preview-figma-dark .preview-sidebar { background: #1e1e1e; }
+.theme-preview-figma-dark .preview-editor { background: #2c2c2c; }
+.theme-preview-figma-dark .preview-line { background: #a259ff; }
+
+.theme-preview-linear-dark .preview-titlebar { background: #0a0a0b; }
+.theme-preview-linear-dark .preview-sidebar { background: #111113; }
+.theme-preview-linear-dark .preview-editor { background: #0a0a0b; }
+.theme-preview-linear-dark .preview-line { background: #5e6ad2; }
+
+.theme-preview-arc-gradient .preview-titlebar {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+}
+.theme-preview-arc-gradient .preview-sidebar { background: #1c1c1e; }
+.theme-preview-arc-gradient .preview-editor { background: #161618; }
+.theme-preview-arc-gradient .preview-line { background: #667eea; }
+
+.theme-preview-obsidian-dark .preview-titlebar { background: #262626; }
+.theme-preview-obsidian-dark .preview-sidebar { background: #262626; }
+.theme-preview-obsidian-dark .preview-editor { background: #1e1e1e; }
+.theme-preview-obsidian-dark .preview-line { background: #7f6df2; }
+
+/* 테마 정보 */
+.theme-info {
+  padding-right: 40px;
+}
+
+.theme-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.theme-description {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* 체크 표시 */
+.theme-check {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  font-size: 18px;
+}
+
+/* 테마 뱃지 */
+.theme-badge {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  border-radius: var(--radius-sm);
+}
+
+.theme-badge.dark {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+}
+
+.theme-badge.light {
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--text-secondary);
+}
+
+/* Appearance Footer */
+.appearance-footer {
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.theme-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.theme-hint .codicon {
+  font-size: 14px;
+  color: var(--info);
+}
+
+/* ===== 라이트 테마 특수 처리 ===== */
+body.theme-light {
+  color-scheme: light;
+}
+
+body.theme-light .theme-badge.dark {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+body.theme-light .theme-badge.light {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* ===== 다크 테마 특수 처리 ===== */
+body.theme-dark {
+  color-scheme: dark;
+}
