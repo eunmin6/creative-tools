@@ -162,17 +162,17 @@
             justify-content: center;
             cursor: pointer;
             position: relative;
-            color: var(--text-secondary);
+            color: var(--activity-bar-inactive);
             transition: color 0.2s;
             margin: 4px 0;
         }
 
         .activity-bar-item:hover {
-            color: var(--button-text);
+            color: var(--activity-bar-active);
         }
 
         .activity-bar-item.active {
-            color: var(--button-text);
+            color: var(--activity-bar-active);
         }
 
         .activity-bar-item.active::before {
@@ -182,7 +182,7 @@
             top: 10px;
             bottom: 10px;
             width: 2px;
-            background: #007acc;
+            background: var(--accent-primary);
         }
 
         .activity-bar-item svg {
@@ -344,7 +344,7 @@
             border-right: 1px solid var(--border-color);
             cursor: pointer;
             font-size: 13px;
-            color: #969696;
+            color: var(--text-secondary);
             display: flex;
             align-items: center;
             gap: 8px;
@@ -353,13 +353,13 @@
         }
 
         .editor-tab.active {
-            background: var(--bg-primary);
-            color: var(--button-text);
-            border-top: 2px solid #007acc;
+            background: var(--tab-active-bg);
+            color: var(--text-primary);
+            border-top: 2px solid var(--accent-primary);
         }
 
         .editor-tab:hover {
-            color: var(--button-text);
+            color: var(--text-primary);
         }
 
         .editor-area {
@@ -779,8 +779,8 @@
         }
 
         .bottom-panel-tab.active {
-            color: #e7e7e7;
-            border-bottom-color: #007acc;
+            color: var(--text-primary);
+            border-bottom-color: var(--accent-primary);
         }
 
         .bottom-panel-actions {

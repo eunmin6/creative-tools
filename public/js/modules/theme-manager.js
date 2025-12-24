@@ -159,9 +159,9 @@
     const themes = getThemeList();
 
     const themeCards = themes.map(theme => `
-      <div class="theme-card ${theme.id === currentTheme ? 'active selected' : ''}"
+      <div class="theme-card ${theme.id === currentTheme ? 'active' : ''}"
            data-theme-id="${theme.id}"
-           onclick="previewTheme('${theme.id}')">
+           onclick="selectTheme('${theme.id}')">
         <div class="theme-preview theme-preview-${theme.id}">
           <div class="preview-titlebar"></div>
           <div class="preview-content">
@@ -193,14 +193,10 @@
         <div class="theme-grid">
           ${themeCards}
         </div>
-        <div class="appearance-actions">
-          <button class="appearance-btn secondary" onclick="cancelThemeChange()">Cancel</button>
-          <button class="appearance-btn primary" onclick="confirmThemeChange()">Apply Theme</button>
-        </div>
         <div class="appearance-footer">
           <p class="theme-hint">
             <span class="codicon codicon-info"></span>
-            Click a theme to preview, then click "Apply Theme" to save your choice.
+            Theme changes are applied immediately and saved automatically.
           </p>
         </div>
       </div>
@@ -292,12 +288,28 @@
   }
 
   /**
-   * 테마 선택 (즉시 적용 - 하위 호환성)
+   * 테마 선택 및 즉시 적용
    * @param {string} themeId
    */
   function selectTheme(themeId) {
-    previewTheme(themeId);
-    confirmThemeChange();
+    if (applyTheme(themeId, true)) {
+      // 선택 UI 업데이트
+      document.querySelectorAll('.theme-card').forEach(card => {
+        const isActive = card.dataset.themeId === themeId;
+        card.classList.toggle('active', isActive);
+
+        const checkEl = card.querySelector('.theme-check');
+        if (checkEl) {
+          checkEl.innerHTML = isActive ? '<span class="codicon codicon-check"></span>' : '';
+        }
+      });
+
+      // 토스트 알림
+      if (typeof window.showToast === 'function') {
+        const themeName = window.Themes[themeId]?.name || themeId;
+        window.showToast('success', `Theme applied: ${themeName}`);
+      }
+    }
   }
 
   // ===== 초기화 =====
