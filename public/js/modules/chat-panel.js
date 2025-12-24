@@ -317,27 +317,50 @@
     }
   }
 
-  // ===== Ollama =====
+  // ===== Model Loading =====
+
+  async function refreshModelList() {
+    const select = document.getElementById('llmSelect');
+    if (!select) return;
+
+    let models = [];
+
+    // LLM 설정 모듈이 있으면 활성화된 모든 Provider에서 모델 가져오기
+    if (typeof window.getModelsFromEnabledProviders === 'function') {
+      models = await window.getModelsFromEnabledProviders();
+    } else {
+      // LLM 설정 모듈이 로드되지 않은 경우 기본 Ollama 시도
+      try {
+        const response = await fetch('http://localhost:11434/api/tags');
+        if (response.ok) {
+          const data = await response.json();
+          models = (data.models || []).map(m => ({
+            id: m.name,
+            name: m.name,
+            provider: 'ollama',
+            displayName: `${m.name} (Ollama)`
+          }));
+        }
+      } catch (error) {
+        console.log('Ollama not available:', error.message);
+      }
+    }
+
+    if (models.length > 0) {
+      select.innerHTML = models.map(model =>
+        `<option value="${model.id}" data-provider="${model.provider}">${model.displayName || model.name}</option>`
+      ).join('');
+
+      // 첫 번째 모델 선택
+      select.value = models[0].id;
+    } else {
+      select.innerHTML = '<option value="">No models available</option>';
+    }
+  }
 
   async function loadOllamaModels() {
-    try {
-      const response = await fetch('http://localhost:11434/api/tags');
-      if (response.ok) {
-        const data = await response.json();
-        const select = document.getElementById('llmSelect');
-        if (select && data.models && data.models.length > 0) {
-          select.innerHTML = data.models.map(model =>
-            `<option value="${model.name}" ${model.name === 'gpt-oss:20b' ? 'selected' : ''}>${model.name}</option>`
-          ).join('');
-
-          if (!data.models.find(m => m.name === 'gpt-oss:20b')) {
-            select.value = data.models[0].name;
-          }
-        }
-      }
-    } catch (error) {
-      console.log('Ollama not available:', error.message);
-    }
+    // refreshModelList로 대체
+    await refreshModelList();
   }
 
   // ===== Chat 패널 토글 =====
@@ -551,15 +574,32 @@
     if (loadingDiv) loadingDiv.remove();
   }
 
-  // ===== Ollama 스트리밍 =====
+  // ===== LLM 스트리밍 =====
 
-  async function streamOllamaResponse(prompt, model, loadingId) {
+  async function streamLLMResponse(prompt, model, loadingId) {
     const messagesContainer = document.getElementById('chatMessages');
     let messageDiv = null;
     let contentDiv = null;
     let fullResponse = '';
     let firstChunkReceived = false;
     const userQuestion = prompt;
+
+    // 선택된 모델의 Provider 확인
+    const select = document.getElementById('llmSelect');
+    const selectedOption = select?.selectedOptions[0];
+    const provider = selectedOption?.dataset.provider || 'ollama';
+
+    // LLM 설정 로드
+    let settings;
+    if (typeof window.loadLLMSettings === 'function') {
+      settings = await window.loadLLMSettings();
+    } else {
+      settings = {
+        ollama: { enabled: true, endpoint: 'http://localhost:11434' },
+        vllm: { enabled: false, endpoint: 'http://localhost:8000' },
+        gemini: { enabled: false, apiKey: '', model: 'gemini-pro' }
+      };
+    }
 
     try {
       let fullPrompt = '';
@@ -586,61 +626,12 @@
 
       fullPrompt += `[Current Question]\n${prompt}`;
 
-      const response = await fetch('http://localhost:11434/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: model,
-          prompt: fullPrompt,
-          stream: true
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n').filter(line => line.trim());
-
-        for (const line of lines) {
-          try {
-            const json = JSON.parse(line);
-            if (json.response) {
-              if (!firstChunkReceived) {
-                firstChunkReceived = true;
-                removeChatLoading(loadingId);
-
-                messageDiv = document.createElement('div');
-                messageDiv.className = 'chat-message assistant';
-                messageDiv.innerHTML = `
-                  <div class="chat-message-role">Assistant</div>
-                  <div class="chat-message-content"></div>
-                `;
-                messagesContainer.appendChild(messageDiv);
-                contentDiv = messageDiv.querySelector('.chat-message-content');
-              }
-
-              fullResponse += json.response;
-              contentDiv.textContent = fullResponse;
-              messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }
-          } catch (e) {
-            // JSON 파싱 실패 무시
-          }
-        }
-      }
-
-      if (contentDiv) {
-        contentDiv.innerHTML = renderMarkdown(fullResponse);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      if (provider === 'ollama') {
+        fullResponse = await streamOllamaProvider(settings.ollama.endpoint, model, fullPrompt, loadingId, messagesContainer);
+      } else if (provider === 'vllm') {
+        fullResponse = await streamVLLMProvider(settings.vllm.endpoint, model, fullPrompt, loadingId, messagesContainer);
+      } else if (provider === 'gemini') {
+        fullResponse = await callGeminiProvider(settings.gemini.apiKey, model, fullPrompt, loadingId, messagesContainer);
       }
 
       chatMessages.push({ role: 'assistant', content: fullResponse });
@@ -660,6 +651,190 @@
     }
   }
 
+  // Ollama Provider
+  async function streamOllamaProvider(endpoint, model, prompt, loadingId, messagesContainer) {
+    let messageDiv = null;
+    let contentDiv = null;
+    let fullResponse = '';
+    let firstChunkReceived = false;
+
+    const response = await fetch(`${endpoint}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: model,
+        prompt: prompt,
+        stream: true
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n').filter(line => line.trim());
+
+      for (const line of lines) {
+        try {
+          const json = JSON.parse(line);
+          if (json.response) {
+            if (!firstChunkReceived) {
+              firstChunkReceived = true;
+              removeChatLoading(loadingId);
+
+              messageDiv = document.createElement('div');
+              messageDiv.className = 'chat-message assistant';
+              messageDiv.innerHTML = `
+                <div class="chat-message-role">Assistant</div>
+                <div class="chat-message-content"></div>
+              `;
+              messagesContainer.appendChild(messageDiv);
+              contentDiv = messageDiv.querySelector('.chat-message-content');
+            }
+
+            fullResponse += json.response;
+            contentDiv.textContent = fullResponse;
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          }
+        } catch (e) {
+          // JSON 파싱 실패 무시
+        }
+      }
+    }
+
+    if (contentDiv) {
+      contentDiv.innerHTML = renderMarkdown(fullResponse);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    return fullResponse;
+  }
+
+  // vLLM Provider (OpenAI 호환)
+  async function streamVLLMProvider(endpoint, model, prompt, loadingId, messagesContainer) {
+    let messageDiv = null;
+    let contentDiv = null;
+    let fullResponse = '';
+    let firstChunkReceived = false;
+
+    const response = await fetch(`${endpoint}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: model,
+        messages: [{ role: 'user', content: prompt }],
+        stream: true
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n').filter(line => line.trim() && line.startsWith('data:'));
+
+      for (const line of lines) {
+        const data = line.substring(5).trim();
+        if (data === '[DONE]') continue;
+
+        try {
+          const json = JSON.parse(data);
+          const content = json.choices?.[0]?.delta?.content;
+          if (content) {
+            if (!firstChunkReceived) {
+              firstChunkReceived = true;
+              removeChatLoading(loadingId);
+
+              messageDiv = document.createElement('div');
+              messageDiv.className = 'chat-message assistant';
+              messageDiv.innerHTML = `
+                <div class="chat-message-role">Assistant</div>
+                <div class="chat-message-content"></div>
+              `;
+              messagesContainer.appendChild(messageDiv);
+              contentDiv = messageDiv.querySelector('.chat-message-content');
+            }
+
+            fullResponse += content;
+            contentDiv.textContent = fullResponse;
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          }
+        } catch (e) {
+          // JSON 파싱 실패 무시
+        }
+      }
+    }
+
+    if (contentDiv) {
+      contentDiv.innerHTML = renderMarkdown(fullResponse);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    return fullResponse;
+  }
+
+  // Gemini Provider (Non-streaming)
+  async function callGeminiProvider(apiKey, model, prompt, loadingId, messagesContainer) {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const fullResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response from Gemini';
+
+    removeChatLoading(loadingId);
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'chat-message assistant';
+    messageDiv.innerHTML = `
+      <div class="chat-message-role">Assistant</div>
+      <div class="chat-message-content">${renderMarkdown(fullResponse)}</div>
+    `;
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    return fullResponse;
+  }
+
+  // 기존 함수 호환성 유지
+  async function streamOllamaResponse(prompt, model, loadingId) {
+    return await streamLLMResponse(prompt, model, loadingId);
+  }
+
+  // ===== LLM 설정 변경 이벤트 리스너 =====
+  window.addEventListener('llmsettingschange', async (event) => {
+    console.log('LLM settings changed, refreshing model list...');
+    await refreshModelList();
+  });
+
   // ===== 전역 노출 =====
   window.initChat = initChat;
   window.toggleChatPanel = toggleChatPanel;
@@ -670,6 +845,7 @@
   window.copyCodeBlock = copyCodeBlock;
   window.escapeHtml = escapeHtml;
   window.renderMarkdown = renderMarkdown;
+  window.refreshModelList = refreshModelList;
 
   // 내부 상태 접근용 (필요시)
   window.getChatMessages = () => chatMessages;

@@ -399,6 +399,10 @@
       if (typeof window.renderAppearanceTab === 'function') {
         window.renderAppearanceTab();
       }
+    } else if (tab.type === 'llmSetting') {
+      if (typeof window.renderLLMSettingTab === 'function') {
+        window.renderLLMSettingTab();
+      }
     } else {
       // Monaco 에디터로 텍스트 파일 편집
       editorArea.innerHTML = '<div id="monaco-container" style="width: 100%; height: 100%;"></div>';
@@ -410,10 +414,14 @@
 
       const language = getLanguageFromFileName(tab.fileName);
 
+      // 현재 앱 테마에 맞는 Monaco 테마 설정
+      const currentThemeType = document.body.dataset.themeType || 'dark';
+      const monacoTheme = currentThemeType === 'light' ? 'custom-light' : 'custom-dark';
+
       monacoEditor = monaco.editor.create(document.getElementById('monaco-container'), {
         value: tab.content,
         language: language,
-        theme: 'custom-dark',
+        theme: monacoTheme,
         automaticLayout: true,
         minimap: { enabled: false },
         fontSize: 14,

@@ -165,7 +165,7 @@
       `<div class="terminal-output-line ${line.type || ''}">${escapeHtml(line.text)}</div>`
     ).join('');
 
-    html += `<div class="terminal-output-line"><span style="color:#6a9955">&gt;&nbsp;</span>${escapeHtml(terminal.currentInput)}<span class="terminal-cursor"></span></div>`;
+    html += `<div class="terminal-output-line">${escapeHtml(terminal.currentInput)}<span class="terminal-cursor"></span></div>`;
 
     contentEl.innerHTML = html;
     contentEl.scrollTop = contentEl.scrollHeight;
@@ -239,7 +239,7 @@
     const terminal = terminals.find(t => t.id === activeTerminalId);
     if (!terminal) return;
 
-    terminal.output.push({ text: `> ${command}`, type: '' });
+    terminal.output.push({ text: command, type: '' });
     renderTerminalContent();
 
     if (!command.trim()) return;
@@ -320,7 +320,7 @@
 
     if (e.ctrlKey && e.key === 'c') {
       e.preventDefault();
-      terminal.output.push({ text: `> ${terminal.currentInput}^C`, type: '' });
+      terminal.output.push({ text: `${terminal.currentInput}^C`, type: '' });
       terminal.currentInput = '';
       terminal.tabMatches = [];
       terminal.tabIndex = 0;

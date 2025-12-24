@@ -74,12 +74,8 @@
    * @param {string} themeType - 'light' 또는 'dark'
    */
   function updateMonacoTheme(themeType) {
-    const monacoEditor = typeof window.getMonacoEditor === 'function'
-      ? window.getMonacoEditor()
-      : null;
-
-    if (monacoEditor && window.monaco) {
-      const monacoTheme = themeType === 'light' ? 'vs' : 'vs-dark';
+    if (window.monaco) {
+      const monacoTheme = themeType === 'light' ? 'custom-light' : 'custom-dark';
       window.monaco.editor.setTheme(monacoTheme);
     }
   }
@@ -132,13 +128,13 @@
   }
 
   /**
-   * Appearance 탭 열기
+   * Theme 탭 열기
    */
   function openAppearanceTab() {
     if (typeof window.addSpecialTab === 'function') {
       window.addSpecialTab({
         filePath: '__appearance__',
-        fileName: 'Appearance',
+        fileName: 'Theme',
         type: 'appearance',
         content: '',
         originalContent: ''
@@ -147,7 +143,7 @@
   }
 
   /**
-   * Appearance 탭 렌더링
+   * Theme 탭 렌더링
    */
   function renderAppearanceTab() {
     const editorArea = document.querySelector('.editor-area');
@@ -158,7 +154,11 @@
 
     const themes = getThemeList();
 
-    const themeCards = themes.map(theme => `
+    // 다크/라이트 테마 분리
+    const darkThemes = themes.filter(t => t.type === 'dark');
+    const lightThemes = themes.filter(t => t.type === 'light');
+
+    const renderThemeCard = (theme) => `
       <div class="theme-card ${theme.id === currentTheme ? 'active' : ''}"
            data-theme-id="${theme.id}"
            onclick="selectTheme('${theme.id}')">
@@ -182,17 +182,29 @@
         </div>
         <div class="theme-badge ${theme.type}">${theme.type === 'light' ? 'Light' : 'Dark'}</div>
       </div>
-    `).join('');
+    `;
 
     editorArea.innerHTML = `
       <div class="appearance-container">
         <div class="appearance-header">
-          <h2>Appearance</h2>
+          <h2>Theme</h2>
           <p>Select a theme for Creative Tools</p>
         </div>
-        <div class="theme-grid">
-          ${themeCards}
+
+        <div class="theme-section">
+          <h3 style="color: var(--text-secondary); font-size: 13px; font-weight: 600; margin-bottom: 12px; text-transform: uppercase;">Dark Themes</h3>
+          <div class="theme-grid">
+            ${darkThemes.map(renderThemeCard).join('')}
+          </div>
         </div>
+
+        <div class="theme-section" style="margin-top: 32px;">
+          <h3 style="color: var(--text-secondary); font-size: 13px; font-weight: 600; margin-bottom: 12px; text-transform: uppercase;">Light Themes</h3>
+          <div class="theme-grid">
+            ${lightThemes.map(renderThemeCard).join('')}
+          </div>
+        </div>
+
         <div class="appearance-footer">
           <p class="theme-hint">
             <span class="codicon codicon-info"></span>

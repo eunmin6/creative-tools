@@ -67,7 +67,7 @@ body {
 
 /* Title Bar */
 .titlebar {
-  background-color: var(--titlebar-bg);
+  background: var(--titlebar-bg);
 }
 
 .titlebar .title {
@@ -103,7 +103,7 @@ body {
 
 /* Activity Bar */
 .activity-bar {
-  background-color: var(--activity-bar-bg);
+  background: var(--activity-bar-bg);
 }
 
 .activity-bar-item {
@@ -425,6 +425,38 @@ input:focus, textarea:focus, select:focus {
 .theme-preview-obsidian-dark .preview-editor { background: #1e1e1e; }
 .theme-preview-obsidian-dark .preview-line { background: #7f6df2; }
 
+.theme-preview-pastel-dream .preview-titlebar { background: linear-gradient(135deg, #f8e8f0 0%, #ffe4ec 50%, #e8d8f0 100%); }
+.theme-preview-pastel-dream .preview-sidebar { background: linear-gradient(180deg, #f0e0f0 0%, #ffe8f0 50%, #e8e0f8 100%); }
+.theme-preview-pastel-dream .preview-editor { background: #fef7f7; }
+.theme-preview-pastel-dream .preview-line { background: #b8a9c9; }
+
+.theme-preview-pastel-ocean .preview-titlebar { background: linear-gradient(135deg, #d8eef8 0%, #c8e8f8 50%, #b8e0f0 100%); }
+.theme-preview-pastel-ocean .preview-sidebar { background: linear-gradient(180deg, #c8e0f0 0%, #b8d8f0 50%, #a8d0e8 100%); }
+.theme-preview-pastel-ocean .preview-editor { background: #f5faff; }
+.theme-preview-pastel-ocean .preview-line { background: #7eb8d8; }
+
+.theme-preview-pastel-olive .preview-titlebar { background: linear-gradient(135deg, #d8d8c0 0%, #c8c8a8 50%, #d0d0b0 100%); }
+.theme-preview-pastel-olive .preview-sidebar { background: linear-gradient(180deg, #c8c8a8 0%, #b8b898 50%, #c0c0a0 100%); }
+.theme-preview-pastel-olive .preview-editor { background: #f8f8f0; }
+.theme-preview-pastel-olive .preview-line { background: #a0a070; }
+
+.theme-preview-vibrant-pop .preview-titlebar { background: #0f3460; }
+.theme-preview-vibrant-pop .preview-sidebar { background: #16213e; }
+.theme-preview-vibrant-pop .preview-editor { background: #1a1a2e; }
+.theme-preview-vibrant-pop .preview-line { background: #e94560; }
+
+.theme-preview-blueprint .preview-titlebar {
+  background: repeating-linear-gradient(0deg, #0d2840 0px, #0d2840 4px, #3d6a9440 4px, #3d6a9440 5px),
+              repeating-linear-gradient(90deg, #0d2840 0px, #0d2840 4px, #3d6a9440 4px, #3d6a9440 5px),
+              #0d2840;
+}
+.theme-preview-blueprint .preview-sidebar {
+  background: repeating-linear-gradient(0deg, #0a1f33 0px, #0a1f33 5px, #3d6a9430 5px, #3d6a9430 6px),
+              #0a1f33;
+}
+.theme-preview-blueprint .preview-editor { background: #1a3a5c; }
+.theme-preview-blueprint .preview-line { background: #4da6ff; }
+
 /* 테마 정보 */
 .theme-info {
   padding-right: 40px;
@@ -572,4 +604,285 @@ body.theme-light .theme-badge.light {
 /* ===== 다크 테마 특수 처리 ===== */
 body.theme-dark {
   color-scheme: dark;
+}
+
+/* ===== LLM Setting 탭 스타일 ===== */
+.llm-setting-container {
+  padding: 40px;
+  max-width: 900px;
+  margin: 0 auto;
+  min-height: 100%;
+}
+
+.llm-setting-header {
+  margin-bottom: 32px;
+}
+
+.llm-setting-header h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+}
+
+.llm-setting-header p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Provider 목록 */
+.llm-providers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Provider 카드 */
+.llm-provider-card {
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  transition: all var(--transition-normal);
+}
+
+.llm-provider-card:hover {
+  border-color: var(--accent-primary);
+}
+
+.llm-provider-card.active {
+  border-color: var(--accent-primary);
+  background: var(--bg-tertiary);
+}
+
+/* Provider 헤더 */
+.llm-provider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.llm-provider-info {
+  flex: 1;
+}
+
+.llm-provider-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.llm-provider-description {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+
+/* Divider */
+.llm-provider-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 16px 0;
+}
+
+/* 필드 영역 */
+.llm-provider-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.llm-setting-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.llm-setting-field label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.llm-setting-field input,
+.llm-setting-field select {
+  padding: 8px 12px;
+  font-size: 13px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  transition: border-color var(--transition-fast);
+}
+
+.llm-setting-field input:focus,
+.llm-setting-field select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.llm-setting-field input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+/* 상태 표시 */
+.llm-provider-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+}
+
+.llm-provider-status.status-connected {
+  background: rgba(78, 201, 176, 0.1);
+  color: var(--success);
+}
+
+.llm-provider-status.status-disconnected {
+  background: rgba(241, 76, 76, 0.1);
+  color: var(--error);
+}
+
+.llm-provider-status.status-unknown {
+  background: rgba(133, 133, 133, 0.1);
+  color: var(--text-secondary);
+}
+
+/* 액션 버튼 */
+.llm-provider-actions {
+  margin-top: 12px;
+}
+
+.llm-test-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.llm-test-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+}
+
+/* Footer */
+.llm-setting-footer {
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.llm-save-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--button-text);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  align-self: flex-start;
+}
+
+.llm-save-btn:hover {
+  background: var(--accent-hover);
+}
+
+.llm-setting-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.llm-setting-hint .codicon {
+  font-size: 14px;
+  color: var(--info);
+}
+
+/* LLM Setting 버튼 (Chat 패널) */
+.llm-setting-btn:hover {
+  background: var(--bg-hover) !important;
+  border-color: var(--accent-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Toggle Switch 스타일 */
+.llm-provider-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  transition: all var(--transition-fast);
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--text-secondary);
+  border-radius: 50%;
+  transition: all var(--transition-fast);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  background-color: white;
+  transform: translateX(20px);
+}
+
+.toggle-switch input:focus + .toggle-slider {
+  box-shadow: 0 0 0 2px rgba(14, 99, 156, 0.3);
 }

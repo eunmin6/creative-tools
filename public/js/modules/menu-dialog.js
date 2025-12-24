@@ -311,6 +311,10 @@
   // ===== 토스트 =====
 
   function showToast(type, message, duration = 3000) {
+    // 토스트 알림 비활성화
+    return;
+
+    /*
     const container = document.getElementById('toastContainer');
 
     let icon = '';
@@ -337,6 +341,7 @@
     container.appendChild(toast);
 
     setTimeout(() => removeToast(toast), duration);
+    */
   }
 
   function removeToast(toast) {

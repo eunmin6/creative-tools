@@ -1100,7 +1100,7 @@
             flex-wrap: wrap;
             gap: 6px;
             padding: 8px 12px;
-            border-bottom: 1px solid #2d2d30;
+            border-bottom: 1px solid var(--border-color);
             max-height: 100px;
             overflow-y: auto;
         }
@@ -1127,7 +1127,7 @@
             height: 12px;
             margin: 0;
             cursor: pointer;
-            accent-color: #0e639c;
+            accent-color: var(--accent-primary);
         }
 
         .chat-attachment-item .file-icon {
@@ -1136,8 +1136,8 @@
         }
 
         .chat-attachment-item.checked {
-            background: #0e639c33;
-            border: 1px solid #0e639c;
+            background: color-mix(in srgb, var(--accent-primary) 20%, transparent);
+            border: 1px solid var(--accent-primary);
         }
 
         .chat-input-wrapper {
@@ -1166,7 +1166,7 @@
         }
 
         .chat-input-wrapper textarea::placeholder {
-            color: #6e6e6e;
+            color: var(--text-secondary);
         }
 
         .chat-send-btn {
@@ -1244,8 +1244,6 @@
                         <div class="dropdown-item" onclick="openFolderFromMenu(event)">Open Folder...</div>
                     </div>
                 </div>
-                <div class="titlebar-menu-item">Edit</div>
-                <div class="titlebar-menu-item">Selection</div>
                 <div class="titlebar-menu-item menu-with-dropdown" id="projectMenu" onclick="toggleMenu('project', event)" onmouseenter="hoverMenu('project', event)">
                     Project
                     <div class="dropdown-menu" id="projectDropdown">
@@ -1268,14 +1266,10 @@
                         <div class="dropdown-divider"></div>
                         <div class="dropdown-item" onclick="openAppearanceTab(); closeAllMenus();">
                             <span style="display: inline-block; width: 16px;"></span>
-                            Appearance
+                            Theme
                         </div>
                     </div>
                 </div>
-                <div class="titlebar-menu-item">Go</div>
-                <div class="titlebar-menu-item">Run</div>
-                <div class="titlebar-menu-item">Terminal</div>
-                <div class="titlebar-menu-item">Help</div>
             </div>
         </div>
         <div class="titlebar-controls">
@@ -1297,6 +1291,7 @@
             <div class="activity-bar-item" data-view="explorer" title="Explorer">
                 <i class="codicon codicon-files"></i>
             </div>
+            <!-- 나중에 사용 예정 - 주석 처리
             <div class="activity-bar-item" data-view="search" title="Search">
                 <i class="codicon codicon-search"></i>
             </div>
@@ -1306,6 +1301,7 @@
             <div class="activity-bar-item" data-view="extensions" title="Extensions">
                 <i class="codicon codicon-extensions"></i>
             </div>
+            -->
         </div>
 
         <!-- 사이드바 (Explorer) - 초기에는 숨김 -->
@@ -1412,11 +1408,15 @@
                         <i class="codicon codicon-send"></i>
                     </button>
                 </div>
-                <div class="chat-options" style="padding: 6px 12px; border-top: 1px solid #2d2d30;">
+                <div class="chat-options" style="padding: 6px 12px; border-top: 1px solid var(--border-color);">
                     <span style="color: var(--text-secondary); font-size: 11px;">Model:</span>
                     <select id="llmSelect" style="background: var(--panel-bg); color: var(--text-primary); border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
                         <option value="gpt-oss:20b">gpt-oss:20b</option>
                     </select>
+                    <button onclick="openLLMSettingTab()" class="llm-setting-btn" title="LLM Setting" style="display: inline-flex; align-items: center; gap: 4px; background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; margin-left: 8px;">
+                        <i class="codicon codicon-settings-gear" style="font-size: 12px;"></i>
+                        Setting
+                    </button>
                 </div>
             </div>
         </div>
@@ -1534,6 +1534,7 @@
     <script src="js/modules/chat-panel.js"></script>
     <script src="js/modules/output-panel.js"></script>
     <script src="js/modules/terminal.js"></script>
+    <script src="js/modules/llm-setting.js"></script>
 
     <!-- 메인 렌더러 (View 전용 기능) -->
     <script src="renderer.js"></script>

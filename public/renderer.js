@@ -238,6 +238,7 @@ function initMonaco() {
       window.setMonacoReady(true);
     }
 
+    // 다크 테마 정의
     monaco.editor.defineTheme('custom-dark', {
       base: 'vs-dark',
       inherit: true,
@@ -247,7 +248,21 @@ function initMonaco() {
         'editor.lineHighlightBackground': '#2a2a2a',
       }
     });
-    monaco.editor.setTheme('custom-dark');
+
+    // 라이트 테마 정의
+    monaco.editor.defineTheme('custom-light', {
+      base: 'vs',
+      inherit: true,
+      rules: [],
+      colors: {
+        'editor.background': '#ffffff',
+        'editor.lineHighlightBackground': '#f5f5f5',
+      }
+    });
+
+    // 현재 앱 테마에 맞는 Monaco 테마 설정
+    const currentThemeType = document.body.dataset.themeType || 'dark';
+    monaco.editor.setTheme(currentThemeType === 'light' ? 'custom-light' : 'custom-dark');
   });
 }
 
@@ -1074,12 +1089,12 @@ function renderCategoryViewer(tab) {
   const stats = calculateCategoryStats(rows);
 
   editorArea.innerHTML = `
-    <div class="category-viewer" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; height: 100%; display: flex; flex-direction: column; overflow: hidden;">
-      <div class="subtab-header" style="display: flex; background: #2d2d2d; border-bottom: 1px solid #3c3c3c; flex-shrink: 0;">
-        <div class="subtab ${activeSubTab === 'overview' ? 'active' : ''}" data-subtab="overview" onclick="switchCategorySubTab('overview')" style="padding: 10px 20px; cursor: pointer; color: ${activeSubTab === 'overview' ? '#ffffff' : '#858585'}; border-bottom: 2px solid ${activeSubTab === 'overview' ? '#007acc' : 'transparent'}; transition: all 0.2s;">Overview</div>
-        <div class="subtab ${activeSubTab === 'modules' ? 'active' : ''}" data-subtab="modules" onclick="switchCategorySubTab('modules')" style="padding: 10px 20px; cursor: pointer; color: ${activeSubTab === 'modules' ? '#ffffff' : '#858585'}; border-bottom: 2px solid ${activeSubTab === 'modules' ? '#007acc' : 'transparent'}; transition: all 0.2s;">Modules</div>
-        <div class="subtab ${activeSubTab === 'implGroups' ? 'active' : ''}" data-subtab="implGroups" onclick="switchCategorySubTab('implGroups')" style="padding: 10px 20px; cursor: pointer; color: ${activeSubTab === 'implGroups' ? '#ffffff' : '#858585'}; border-bottom: 2px solid ${activeSubTab === 'implGroups' ? '#007acc' : 'transparent'}; transition: all 0.2s;">Impl Groups</div>
-        <div class="subtab ${activeSubTab === 'testMethods' ? 'active' : ''}" data-subtab="testMethods" onclick="switchCategorySubTab('testMethods')" style="padding: 10px 20px; cursor: pointer; color: ${activeSubTab === 'testMethods' ? '#ffffff' : '#858585'}; border-bottom: 2px solid ${activeSubTab === 'testMethods' ? '#007acc' : 'transparent'}; transition: all 0.2s;">Test Methods</div>
+    <div class="category-viewer" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; height: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-primary); color: var(--text-primary);">
+      <div class="subtab-header" style="display: flex; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); flex-shrink: 0;">
+        <div class="subtab ${activeSubTab === 'overview' ? 'active' : ''}" data-subtab="overview" onclick="switchCategorySubTab('overview')" style="padding: 10px 20px; cursor: pointer; color: ${activeSubTab === 'overview' ? 'var(--text-primary)' : 'var(--text-secondary)'}; border-bottom: 2px solid ${activeSubTab === 'overview' ? 'var(--accent-primary)' : 'transparent'}; transition: all 0.2s;">Overview</div>
+        <div class="subtab ${activeSubTab === 'modules' ? 'active' : ''}" data-subtab="modules" onclick="switchCategorySubTab('modules')" style="padding: 10px 20px; cursor: pointer; color: ${activeSubTab === 'modules' ? 'var(--text-primary)' : 'var(--text-secondary)'}; border-bottom: 2px solid ${activeSubTab === 'modules' ? 'var(--accent-primary)' : 'transparent'}; transition: all 0.2s;">Modules</div>
+        <div class="subtab ${activeSubTab === 'implGroups' ? 'active' : ''}" data-subtab="implGroups" onclick="switchCategorySubTab('implGroups')" style="padding: 10px 20px; cursor: pointer; color: ${activeSubTab === 'implGroups' ? 'var(--text-primary)' : 'var(--text-secondary)'}; border-bottom: 2px solid ${activeSubTab === 'implGroups' ? 'var(--accent-primary)' : 'transparent'}; transition: all 0.2s;">Impl Groups</div>
+        <div class="subtab ${activeSubTab === 'testMethods' ? 'active' : ''}" data-subtab="testMethods" onclick="switchCategorySubTab('testMethods')" style="padding: 10px 20px; cursor: pointer; color: ${activeSubTab === 'testMethods' ? 'var(--text-primary)' : 'var(--text-secondary)'}; border-bottom: 2px solid ${activeSubTab === 'testMethods' ? 'var(--accent-primary)' : 'transparent'}; transition: all 0.2s;">Test Methods</div>
       </div>
 
       <div class="subtab-content" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
@@ -1154,36 +1169,36 @@ function renderOverviewTab(rows, stats) {
   return `
     <div style="padding: 20px; height: 100%; display: flex; flex-direction: column; overflow: hidden;">
       <div class="stats-summary" style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; flex-shrink: 0;">
-        <div class="stat-card" style="background: #2d2d30; padding: 15px 20px; border-radius: 6px; min-width: 150px;">
-          <div style="font-size: 24px; font-weight: 600; color: #4fc3f7;">${rows.length}</div>
-          <div style="font-size: 13px; color: #858585; margin-top: 4px;">Total TCs</div>
+        <div class="stat-card" style="background: var(--bg-secondary); padding: 15px 20px; border-radius: 6px; min-width: 150px; border: 1px solid var(--border-color);">
+          <div style="font-size: 24px; font-weight: 600; color: var(--info);">${rows.length}</div>
+          <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">Total TCs</div>
         </div>
-        <div class="stat-card" style="background: #2d2d30; padding: 15px 20px; border-radius: 6px; min-width: 150px;">
-          <div style="font-size: 24px; font-weight: 600; color: #81c784;">${stats.automation.yes} / ${rows.length}</div>
-          <div style="font-size: 13px; color: #858585; margin-top: 4px;">Automation (Y)</div>
+        <div class="stat-card" style="background: var(--bg-secondary); padding: 15px 20px; border-radius: 6px; min-width: 150px; border: 1px solid var(--border-color);">
+          <div style="font-size: 24px; font-weight: 600; color: var(--success);">${stats.automation.yes} / ${rows.length}</div>
+          <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">Automation (Y)</div>
         </div>
-        <div class="stat-card" style="background: #2d2d30; padding: 15px 20px; border-radius: 6px; min-width: 150px;">
-          <div style="font-size: 24px; font-weight: 600; color: #ffb74d;">${stats.modules.size}</div>
-          <div style="font-size: 13px; color: #858585; margin-top: 4px;">Modules</div>
+        <div class="stat-card" style="background: var(--bg-secondary); padding: 15px 20px; border-radius: 6px; min-width: 150px; border: 1px solid var(--border-color);">
+          <div style="font-size: 24px; font-weight: 600; color: var(--warning);">${stats.modules.size}</div>
+          <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">Modules</div>
         </div>
-        <div class="stat-card" style="background: #2d2d30; padding: 15px 20px; border-radius: 6px; min-width: 150px;">
-          <div style="font-size: 24px; font-weight: 600; color: #ba68c8;">${stats.implGroups.size}</div>
-          <div style="font-size: 13px; color: #858585; margin-top: 4px;">Impl Groups</div>
+        <div class="stat-card" style="background: var(--bg-secondary); padding: 15px 20px; border-radius: 6px; min-width: 150px; border: 1px solid var(--border-color);">
+          <div style="font-size: 24px; font-weight: 600; color: var(--accent-primary);">${stats.implGroups.size}</div>
+          <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">Impl Groups</div>
         </div>
       </div>
 
-      <div style="font-size: 13px; color: #858585; margin-bottom: 10px; flex-shrink: 0;">
+      <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; flex-shrink: 0;">
         Showing <span id="filteredCount">${rows.length}</span> of ${rows.length} TCs
       </div>
 
-      <div class="list-view-container" style="flex: 1; overflow: auto; background: #1e1e1e; border: 1px solid #3c3c3c; border-radius: 4px;">
+      <div class="list-view-container" style="flex: 1; overflow: auto; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 4px;">
         <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-          <thead style="position: sticky; top: 0; background: #2d2d30; z-index: 1;">
+          <thead style="position: sticky; top: 0; background: var(--bg-secondary); z-index: 1;">
             <tr>
-              <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid #3c3c3c; color: #cccccc;">TC ID</th>
-              <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid #3c3c3c; color: #cccccc;">Module</th>
-              <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid #3c3c3c; color: #cccccc;">Impl Group</th>
-              <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid #3c3c3c; color: #cccccc;">Automation</th>
+              <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border-color); color: var(--text-primary);">TC ID</th>
+              <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border-color); color: var(--text-primary);">Module</th>
+              <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border-color); color: var(--text-primary);">Impl Group</th>
+              <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border-color); color: var(--text-primary);">Automation</th>
             </tr>
           </thead>
           <tbody id="tcListBody">
@@ -1203,11 +1218,11 @@ function renderTCRows(rows) {
     const automation = row['Automation'] || '';
 
     return `
-      <tr class="tc-row" data-tcid="${tcId}" data-module="${module}" data-impl="${implGroup}" data-automation="${automation}" style="border-bottom: 1px solid #2d2d2d;">
-        <td style="padding: 10px 12px;"><span onclick="openTestcaseFile('${tcId}')" style="color: #4fc3f7; cursor: pointer; text-decoration: underline;">${tcId}</span></td>
-        <td style="padding: 10px 12px; color: #cccccc;">${module}</td>
-        <td style="padding: 10px 12px; color: #cccccc;">${implGroup}</td>
-        <td style="padding: 10px 12px;"><span style="background: ${automation.toUpperCase().includes('Y') ? '#2e7d32' : '#616161'}; padding: 2px 8px; border-radius: 3px; font-size: 11px;">${automation}</span></td>
+      <tr class="tc-row" data-tcid="${tcId}" data-module="${module}" data-impl="${implGroup}" data-automation="${automation}" style="border-bottom: 1px solid var(--border-color);">
+        <td style="padding: 10px 12px;"><span onclick="openTestcaseFile('${tcId}')" style="color: var(--info); cursor: pointer; text-decoration: underline;">${tcId}</span></td>
+        <td style="padding: 10px 12px; color: var(--text-primary);">${module}</td>
+        <td style="padding: 10px 12px; color: var(--text-primary);">${implGroup}</td>
+        <td style="padding: 10px 12px;"><span style="background: ${automation.toUpperCase().includes('Y') ? 'var(--success)' : 'var(--text-secondary)'}; color: #fff; padding: 2px 8px; border-radius: 3px; font-size: 11px;">${automation}</span></td>
       </tr>
     `;
   }).join('');
@@ -1227,27 +1242,27 @@ function renderGroupedTab(rows, groupKey, title, color, groupSet) {
 
   return `
     <div style="padding: 20px; height: 100%; overflow: auto;">
-      <div style="font-size: 16px; font-weight: 600; color: #cccccc; margin-bottom: 20px;">
+      <div style="font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 20px;">
         ${title} <span style="color: ${color}; margin-left: 8px;">(${sortedGroups.length})</span>
       </div>
       <div class="grouped-list">
         ${sortedGroups.map(([groupName, groupRows], idx) => `
           <div class="group-item" style="margin-bottom: 2px;">
-            <div class="group-header" onclick="toggleGroupExpand(${idx})" style="display: flex; align-items: center; padding: 12px 16px; background: #2d2d30; cursor: pointer; border-radius: 4px; transition: background 0.2s;">
-              <span class="group-chevron" id="chevron-${idx}" style="margin-right: 10px; color: #858585; transition: transform 0.2s;">▶</span>
-              <span style="flex: 1; font-size: 14px; color: #cccccc;">${groupName}</span>
-              <span style="background: ${color}; color: #1e1e1e; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600;">${groupRows.length}</span>
+            <div class="group-header" onclick="toggleGroupExpand(${idx})" style="display: flex; align-items: center; padding: 12px 16px; background: var(--bg-secondary); cursor: pointer; border-radius: 4px; transition: background 0.2s; border: 1px solid var(--border-color);">
+              <span class="group-chevron" id="chevron-${idx}" style="margin-right: 10px; color: var(--text-secondary); transition: transform 0.2s;">▶</span>
+              <span style="flex: 1; font-size: 14px; color: var(--text-primary);">${groupName}</span>
+              <span style="background: ${color}; color: #fff; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600;">${groupRows.length}</span>
             </div>
-            <div class="group-content" id="group-content-${idx}" style="display: none; margin-left: 26px; border-left: 2px solid #3c3c3c; margin-top: 2px;">
+            <div class="group-content" id="group-content-${idx}" style="display: none; margin-left: 26px; border-left: 2px solid var(--border-color); margin-top: 2px;">
               <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
                 <tbody>
                   ${groupRows.map(row => {
                     const rowTcId = row['TC_ID'] || row['ID'] || '';
                     return `
-                    <tr style="border-bottom: 1px solid #2d2d2d;">
-                      <td style="padding: 8px 12px;"><span onclick="openTestcaseFile('${rowTcId}')" style="color: #4fc3f7; cursor: pointer; text-decoration: underline;">${rowTcId}</span></td>
-                      <td style="padding: 8px 12px;"><span style="background: ${(row['Automation'] || '').toUpperCase().includes('Y') ? '#2e7d32' : '#616161'}; padding: 2px 8px; border-radius: 3px; font-size: 12px;">${row['Automation'] || ''}</span></td>
-                      <td style="padding: 8px 12px; color: #cccccc;">${row['Impl_Group'] || ''}</td>
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                      <td style="padding: 8px 12px;"><span onclick="openTestcaseFile('${rowTcId}')" style="color: var(--info); cursor: pointer; text-decoration: underline;">${rowTcId}</span></td>
+                      <td style="padding: 8px 12px;"><span style="background: ${(row['Automation'] || '').toUpperCase().includes('Y') ? 'var(--success)' : 'var(--text-secondary)'}; color: #fff; padding: 2px 8px; border-radius: 3px; font-size: 12px;">${row['Automation'] || ''}</span></td>
+                      <td style="padding: 8px 12px; color: var(--text-primary);">${row['Impl_Group'] || ''}</td>
                     </tr>
                   `}).join('')}
                 </tbody>
@@ -1273,27 +1288,27 @@ function renderTestMethodsTab(rows, testMethodSet) {
 
   return `
     <div style="padding: 20px; height: 100%; overflow: auto;">
-      <div style="font-size: 16px; font-weight: 600; color: #cccccc; margin-bottom: 20px;">
-        Test Methods <span style="color: #4db6ac; margin-left: 8px;">(${sortedMethods.length})</span>
+      <div style="font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 20px;">
+        Test Methods <span style="color: var(--success); margin-left: 8px;">(${sortedMethods.length})</span>
       </div>
       <div class="grouped-list">
         ${sortedMethods.map(([methodName, methodRows], idx) => `
           <div class="group-item" style="margin-bottom: 2px;">
-            <div class="group-header" onclick="toggleGroupExpand(${idx + 1000})" style="display: flex; align-items: center; padding: 12px 16px; background: #2d2d30; cursor: pointer; border-radius: 4px; transition: background 0.2s;">
-              <span class="group-chevron" id="chevron-${idx + 1000}" style="margin-right: 10px; color: #858585; transition: transform 0.2s;">▶</span>
-              <span style="flex: 1; font-size: 14px; color: #cccccc;">${methodName}</span>
-              <span style="background: #4db6ac; color: #1e1e1e; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600;">${methodRows.length}</span>
+            <div class="group-header" onclick="toggleGroupExpand(${idx + 1000})" style="display: flex; align-items: center; padding: 12px 16px; background: var(--bg-secondary); cursor: pointer; border-radius: 4px; transition: background 0.2s; border: 1px solid var(--border-color);">
+              <span class="group-chevron" id="chevron-${idx + 1000}" style="margin-right: 10px; color: var(--text-secondary); transition: transform 0.2s;">▶</span>
+              <span style="flex: 1; font-size: 14px; color: var(--text-primary);">${methodName}</span>
+              <span style="background: var(--success); color: #fff; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 600;">${methodRows.length}</span>
             </div>
-            <div class="group-content" id="group-content-${idx + 1000}" style="display: none; margin-left: 26px; border-left: 2px solid #3c3c3c; margin-top: 2px;">
+            <div class="group-content" id="group-content-${idx + 1000}" style="display: none; margin-left: 26px; border-left: 2px solid var(--border-color); margin-top: 2px;">
               <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
                 <tbody>
                   ${methodRows.map(row => {
                     const rowTcId = row['TC_ID'] || row['ID'] || '';
                     return `
-                    <tr style="border-bottom: 1px solid #2d2d2d;">
-                      <td style="padding: 8px 12px;"><span onclick="openTestcaseFile('${rowTcId}')" style="color: #4fc3f7; cursor: pointer; text-decoration: underline;">${rowTcId}</span></td>
-                      <td style="padding: 8px 12px; color: #cccccc;">${row['Module_Group'] || row['Module'] || ''}</td>
-                      <td style="padding: 8px 12px;"><span style="background: ${(row['Automation'] || '').toUpperCase().includes('Y') ? '#2e7d32' : '#616161'}; padding: 2px 8px; border-radius: 3px; font-size: 12px;">${row['Automation'] || ''}</span></td>
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                      <td style="padding: 8px 12px;"><span onclick="openTestcaseFile('${rowTcId}')" style="color: var(--info); cursor: pointer; text-decoration: underline;">${rowTcId}</span></td>
+                      <td style="padding: 8px 12px; color: var(--text-primary);">${row['Module_Group'] || row['Module'] || ''}</td>
+                      <td style="padding: 8px 12px;"><span style="background: ${(row['Automation'] || '').toUpperCase().includes('Y') ? 'var(--success)' : 'var(--text-secondary)'}; color: #fff; padding: 2px 8px; border-radius: 3px; font-size: 12px;">${row['Automation'] || ''}</span></td>
                     </tr>
                   `}).join('')}
                 </tbody>
