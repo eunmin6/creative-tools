@@ -226,7 +226,7 @@
     // 코드 블록 (```)
     text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (match, lang, code) => {
       const escapedCode = escapeHtml(code.trim());
-      return `<pre style="background: #1e1e1e; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 8px 0;"><code style="font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; color: #d4d4d4;">${escapedCode}</code></pre>`;
+      return `<pre style="background: var(--bg-tertiary); padding: 12px; border-radius: 6px; overflow-x: auto; margin: 8px 0;"><code style="font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; color: var(--text-primary);">${escapedCode}</code></pre>`;
     });
 
     // 테이블 렌더링
@@ -249,7 +249,7 @@
       tableHtml += '<thead><tr>';
       headerCells.forEach((cell, i) => {
         const align = alignments[i] || 'left';
-        tableHtml += `<th style="border: 1px solid #555; padding: 8px 12px; background: #2d2d2d; text-align: ${align}; color: #e0e0e0; font-weight: 600;">${cell.trim()}</th>`;
+        tableHtml += `<th style="border: 1px solid var(--border-color); padding: 8px 12px; background: var(--bg-tertiary); text-align: ${align}; color: var(--text-primary); font-weight: 600;">${cell.trim()}</th>`;
       });
       tableHtml += '</tr></thead>';
 
@@ -259,7 +259,7 @@
         tableHtml += '<tr>';
         cells.forEach((cell, i) => {
           const align = alignments[i] || 'left';
-          tableHtml += `<td style="border: 1px solid #454545; padding: 6px 12px; text-align: ${align}; color: #cccccc;">${cell.trim()}</td>`;
+          tableHtml += `<td style="border: 1px solid var(--border-color); padding: 6px 12px; text-align: ${align}; color: var(--text-primary);">${cell.trim()}</td>`;
         });
         tableHtml += '</tr>';
       });
@@ -269,16 +269,16 @@
     });
 
     // 인라인 코드 (`)
-    text = text.replace(/`([^`]+)`/g, '<code style="background: #3c3c3c; padding: 2px 6px; border-radius: 3px; font-family: \'Consolas\', monospace; font-size: 12px;">$1</code>');
+    text = text.replace(/`([^`]+)`/g, '<code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 3px; font-family: \'Consolas\', monospace; font-size: 12px; color: var(--text-primary);">$1</code>');
 
     // 헤더
-    text = text.replace(/^### (.+)$/gm, '<h3 style="font-size: 14px; font-weight: 600; margin: 12px 0 8px 0; color: #e0e0e0;">$1</h3>');
-    text = text.replace(/^## (.+)$/gm, '<h2 style="font-size: 15px; font-weight: 600; margin: 14px 0 8px 0; color: #e0e0e0;">$1</h2>');
-    text = text.replace(/^# (.+)$/gm, '<h1 style="font-size: 16px; font-weight: 600; margin: 16px 0 10px 0; color: #ffffff;">$1</h1>');
+    text = text.replace(/^### (.+)$/gm, '<h3 style="font-size: 14px; font-weight: 600; margin: 12px 0 8px 0; color: var(--text-primary);">$1</h3>');
+    text = text.replace(/^## (.+)$/gm, '<h2 style="font-size: 15px; font-weight: 600; margin: 14px 0 8px 0; color: var(--text-primary);">$1</h2>');
+    text = text.replace(/^# (.+)$/gm, '<h1 style="font-size: 16px; font-weight: 600; margin: 16px 0 10px 0; color: var(--text-primary);">$1</h1>');
 
     // 볼드
-    text = text.replace(/\*\*(.+?)\*\*/g, '<strong style="color: #ffffff;">$1</strong>');
-    text = text.replace(/__(.+?)__/g, '<strong style="color: #ffffff;">$1</strong>');
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong style="color: var(--text-primary);">$1</strong>');
+    text = text.replace(/__(.+?)__/g, '<strong style="color: var(--text-primary);">$1</strong>');
 
     // 이탤릭
     text = text.replace(/\*([^\*]+)\*/g, '<em>$1</em>');
