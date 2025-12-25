@@ -851,20 +851,24 @@ def main():
 
     results, all_automation, all_modules, all_module_groups, all_methods, all_impl_types, all_impl_groups = result
 
+    # Create .vvu.category folder
+    category_dir = os.path.join(testcase_dir, '.vvu.category')
+    os.makedirs(category_dir, exist_ok=True)
+
     # Step 1: Raw categorization
-    output_path_1 = os.path.join(testcase_dir, '.vvu.category(1).xlsx')
+    output_path_1 = os.path.join(category_dir, 'ctg_1.xlsx')
     success1 = create_excel_step1(results, all_automation, all_modules, all_methods, all_impl_types, output_path_1, options)
 
     # Step 2: Module grouping
-    output_path_2 = os.path.join(testcase_dir, '.vvu.category(2).xlsx')
+    output_path_2 = os.path.join(category_dir, 'ctg_2.xlsx')
     success2 = create_excel_step2(results, all_automation, all_module_groups, all_methods, all_impl_types, output_path_2, options)
 
     # Step 3: Refined with summary
-    output_path_3 = os.path.join(testcase_dir, '.vvu.category(3).xlsx')
+    output_path_3 = os.path.join(category_dir, 'ctg_3.xlsx')
     success3 = create_excel_step3(results, all_automation, all_module_groups, all_methods, all_impl_groups, output_path_3, options)
 
     # Final
-    output_path_final = os.path.join(testcase_dir, '.vvu.category.final.xlsx')
+    output_path_final = os.path.join(category_dir, 'ctg_final.xlsx')
     success_final = create_final_excel(results, all_automation, all_module_groups, all_methods, all_impl_groups, output_path_final, options)
 
     if success_final:

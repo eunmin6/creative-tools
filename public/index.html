@@ -1519,10 +1519,6 @@
             <i class="codicon codicon-desktop-download"></i>
             <span class="context-menu-label">Open with Excel</span>
         </div>
-        <div class="context-menu-item" onclick="openCategoryViewer()">
-            <i class="codicon codicon-graph"></i>
-            <span class="context-menu-label">View Category</span>
-        </div>
         <div class="context-menu-separator"></div>
         <div class="context-menu-item" onclick="copyPath()">
             <i class="codicon codicon-copy"></i>
@@ -1570,6 +1566,25 @@
         <div class="context-menu-item danger" onclick="deleteRobotFilesInFolder()">
             <i class="codicon codicon-trash"></i>
             <span class="context-menu-label">Delete *.robot</span>
+        </div>
+    </div>
+
+    <!-- .vvu.category 폴더 전용 컨텍스트 메뉴 -->
+    <div class="file-context-menu" id="categoryFolderContextMenu" style="display: none;">
+        <div class="context-menu-item" onclick="openCategoryViewer()">
+            <i class="codicon codicon-graph"></i>
+            <span class="context-menu-label">View Category</span>
+        </div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" onclick="copyPath()">
+            <i class="codicon codicon-copy"></i>
+            <span class="context-menu-label">Copy Path</span>
+        </div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item danger" onclick="deleteItem()">
+            <i class="codicon codicon-trash"></i>
+            <span class="context-menu-label">Delete</span>
+            <span class="context-menu-shortcut">Del</span>
         </div>
     </div>
 

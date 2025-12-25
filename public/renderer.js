@@ -998,14 +998,21 @@ async function saveConfiguration() {
 
 async function openCategoryViewer() {
   const target = window.getContextMenuTarget ? window.getContextMenuTarget() : {};
-  const filePath = target.path;
-  const fileName = target.name;
+  let filePath = target.path;
+  let fileName = target.name;
+  const isFolder = target.isFolder;
 
   if (typeof window.hideContextMenu === 'function') {
     window.hideContextMenu();
   }
 
   if (!filePath) return;
+
+  // If target is .vvu.category folder, use ctg_final.xlsx inside it
+  if (isFolder && fileName === '.vvu.category') {
+    filePath = filePath.replace(/\\/g, '/') + '/ctg_final.xlsx';
+    fileName = 'ctg_final.xlsx';
+  }
 
   const openTabs = window.getOpenTabs ? window.getOpenTabs() : [];
   const existingTabIndex = openTabs.findIndex(tab =>

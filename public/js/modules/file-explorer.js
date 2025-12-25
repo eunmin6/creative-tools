@@ -125,7 +125,9 @@
       folder.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (name.toLowerCase().startsWith('testcase')) {
+        if (name === '.vvu.category') {
+          showCategoryFolderContextMenu(e, fullPath, name);
+        } else if (name.toLowerCase().startsWith('testcase')) {
           showTestcaseFolderContextMenu(e, fullPath, name);
         } else {
           showContextMenu(e, fullPath, name, true);
@@ -208,10 +210,12 @@
     const testcaseMenu = document.getElementById('testcaseFolderContextMenu');
     const excelMenu = document.getElementById('excelContextMenu');
     const mdMenu = document.getElementById('mdFileContextMenu');
+    const categoryMenu = document.getElementById('categoryFolderContextMenu');
     if (menu) menu.style.display = 'none';
     if (testcaseMenu) testcaseMenu.style.display = 'none';
     if (excelMenu) excelMenu.style.display = 'none';
     if (mdMenu) mdMenu.style.display = 'none';
+    if (categoryMenu) categoryMenu.style.display = 'none';
     document.removeEventListener('click', hideContextMenu);
     document.removeEventListener('contextmenu', hideContextMenu);
   }
@@ -273,6 +277,30 @@
       }
     }
 
+    menu.style.display = 'block';
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+      menu.style.left = (window.innerWidth - rect.width - 5) + 'px';
+    }
+    if (rect.bottom > window.innerHeight) {
+      menu.style.top = (window.innerHeight - rect.height - 5) + 'px';
+    }
+
+    setTimeout(() => {
+      document.addEventListener('click', hideContextMenu);
+      document.addEventListener('contextmenu', hideContextMenu);
+    }, 0);
+  }
+
+  function showCategoryFolderContextMenu(e, folderPath, folderName) {
+    contextMenuTargetPath = folderPath;
+    contextMenuTargetName = folderName;
+    contextMenuTargetIsFolder = true;
+
+    const menu = document.getElementById('categoryFolderContextMenu');
     menu.style.display = 'block';
     menu.style.left = e.clientX + 'px';
     menu.style.top = e.clientY + 'px';
@@ -1125,6 +1153,7 @@
   window.showExcelContextMenu = showExcelContextMenu;
   window.openExcelWithProgram = openExcelWithProgram;
   window.showTestcaseFolderContextMenu = showTestcaseFolderContextMenu;
+  window.showCategoryFolderContextMenu = showCategoryFolderContextMenu;
   window.getFileIcon = getFileIcon;
   window.loadFolderContents = loadFolderContents;
   window.setupTreeInteraction = setupTreeInteraction;
