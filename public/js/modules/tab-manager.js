@@ -145,6 +145,8 @@
 
       // 파일 이름
       const tabLabel = document.createElement('span');
+      tabLabel.className = 'tab-label';
+      tabLabel.dataset.fileName = tab.fileName;
       const isModified = hasUnsavedChanges(index);
       const maxLength = 20;
       let displayName = tab.fileName;

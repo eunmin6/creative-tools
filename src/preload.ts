@@ -106,6 +106,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
 
+  // Robot Framework 실행
+  robot: {
+    dryrun: async (filePath: string) => {
+      return await ipcRenderer.invoke('robot:dryrun', filePath);
+    }
+  },
+
   // Shell (파일 열기)
   shell: {
     openPath: async (filePath: string) => {

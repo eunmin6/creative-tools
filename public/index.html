@@ -695,7 +695,7 @@
 
         .context-menu-separator {
             height: 1px;
-            background: #454545;
+            background: var(--border-color);
             margin: 4px 8px;
         }
 
@@ -1230,6 +1230,39 @@
             0%, 80%, 100% { transform: scale(0); }
             40% { transform: scale(1); }
         }
+
+        /* 탭 로딩 애니메이션 - 펄스 + 스피너 */
+        .tab-label.generating {
+            animation: tabPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes tabPulse {
+            0%, 100% {
+                opacity: 1;
+                color: var(--text-primary);
+            }
+            50% {
+                opacity: 0.4;
+                color: var(--accent-primary);
+            }
+        }
+
+        .tab-spinner {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            margin-left: 6px;
+            margin-top: 2px;
+            vertical-align: middle;
+            border: 2px solid var(--text-secondary);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: tabSpin 0.8s linear infinite;
+        }
+
+        @keyframes tabSpin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -1463,6 +1496,11 @@
 
     <!-- 파일/폴더 컨텍스트 메뉴 -->
     <div class="file-context-menu" id="fileContextMenu" style="display: none;">
+        <div class="context-menu-item" onclick="copyPath()">
+            <i class="codicon codicon-copy"></i>
+            <span class="context-menu-label">Copy Path</span>
+        </div>
+        <div class="context-menu-separator"></div>
         <div class="context-menu-item" onclick="renameItem()">
             <i class="codicon codicon-edit"></i>
             <span class="context-menu-label">Rename</span>
@@ -1486,6 +1524,11 @@
             <span class="context-menu-label">View Category</span>
         </div>
         <div class="context-menu-separator"></div>
+        <div class="context-menu-item" onclick="copyPath()">
+            <i class="codicon codicon-copy"></i>
+            <span class="context-menu-label">Copy Path</span>
+        </div>
+        <div class="context-menu-separator"></div>
         <div class="context-menu-item" onclick="renameItem()">
             <i class="codicon codicon-edit"></i>
             <span class="context-menu-label">Rename</span>
@@ -1500,9 +1543,46 @@
 
     <!-- testcase 폴더 전용 컨텍스트 메뉴 -->
     <div class="file-context-menu" id="testcaseFolderContextMenu" style="display: none;">
+        <div class="context-menu-item" id="generateScriptMenuItem">
+            <i class="codicon codicon-run-all"></i>
+            <span class="context-menu-label">Generate Script</span>
+        </div>
         <div class="context-menu-item" onclick="openCategorize()">
             <i class="codicon codicon-tag"></i>
             <span class="context-menu-label">Categorize</span>
+        </div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" onclick="copyPath()">
+            <i class="codicon codicon-copy"></i>
+            <span class="context-menu-label">Copy Path</span>
+        </div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" onclick="renameItem()">
+            <i class="codicon codicon-edit"></i>
+            <span class="context-menu-label">Rename</span>
+            <span class="context-menu-shortcut">F2</span>
+        </div>
+        <div class="context-menu-item danger" onclick="deleteItem()">
+            <i class="codicon codicon-trash"></i>
+            <span class="context-menu-label">Delete</span>
+            <span class="context-menu-shortcut">Del</span>
+        </div>
+        <div class="context-menu-item danger" onclick="deleteRobotFilesInFolder()">
+            <i class="codicon codicon-trash"></i>
+            <span class="context-menu-label">Delete *.robot</span>
+        </div>
+    </div>
+
+    <!-- MD 파일 전용 컨텍스트 메뉴 -->
+    <div class="file-context-menu" id="mdFileContextMenu" style="display: none;">
+        <div class="context-menu-item" onclick="generateRobotScript()">
+            <i class="codicon codicon-run-all"></i>
+            <span class="context-menu-label">Generate Script</span>
+        </div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" onclick="copyPath()">
+            <i class="codicon codicon-copy"></i>
+            <span class="context-menu-label">Copy Path</span>
         </div>
         <div class="context-menu-separator"></div>
         <div class="context-menu-item" onclick="renameItem()">
@@ -1535,6 +1615,7 @@
     <script src="js/modules/output-panel.js"></script>
     <script src="js/modules/terminal.js"></script>
     <script src="js/modules/llm-setting.js"></script>
+    <script src="js/modules/robot-generator.js"></script>
 
     <!-- 메인 렌더러 (View 전용 기능) -->
     <script src="renderer.js"></script>

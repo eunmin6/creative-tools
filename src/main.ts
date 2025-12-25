@@ -322,6 +322,68 @@ function setupIpcHandlers(): void {
     return { success: false, error: 'Process not found' };
   });
 
+  // ===== Robot Framework 관련 핸들러 =====
+
+  // Robot Framework dry-run 실행
+  ipcMain.handle('robot:dryrun', async (event, robotFilePath: string) => {
+    return new Promise((resolve) => {
+      const isWindows = process.platform === 'win32';
+
+      // python -m robot 사용 (PATH 문제 해결)
+      const command = isWindows
+        ? `chcp 65001 >nul && python -m robot --dryrun "${robotFilePath}"`
+        : `python -m robot --dryrun "${robotFilePath}"`;
+
+      const robotProcess = spawn(command, [], {
+        shell: true,
+        cwd: path.dirname(robotFilePath),
+        env: {
+          ...process.env,
+          PYTHONIOENCODING: 'utf-8',
+          PYTHONLEGACYWINDOWSSTDIO: '0'
+        }
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      robotProcess.stdout.on('data', (data: Buffer) => {
+        // Windows cp949 → UTF-8 변환 시도
+        try {
+          stdout += data.toString('utf8');
+        } catch {
+          stdout += data.toString();
+        }
+      });
+
+      robotProcess.stderr.on('data', (data: Buffer) => {
+        try {
+          stderr += data.toString('utf8');
+        } catch {
+          stderr += data.toString();
+        }
+      });
+
+      robotProcess.on('error', (error) => {
+        resolve({
+          success: false,
+          stdout: '',
+          stderr: error.message,
+          code: -1
+        });
+      });
+
+      robotProcess.on('close', (code) => {
+        resolve({
+          success: code === 0,
+          stdout,
+          stderr,
+          code
+        });
+      });
+    });
+  });
+
   // ===== 터미널 관련 핸들러 =====
 
   // 새 터미널 생성

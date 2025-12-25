@@ -167,6 +167,8 @@
       e.stopPropagation();
       if (isExcelFile(fullPath)) {
         showExcelContextMenu(e, fullPath, name);
+      } else if (isMdFile(fullPath)) {
+        showMdFileContextMenu(e, fullPath, name);
       } else {
         showContextMenu(e, fullPath, name, false);
       }
@@ -205,9 +207,11 @@
     const menu = document.getElementById('fileContextMenu');
     const testcaseMenu = document.getElementById('testcaseFolderContextMenu');
     const excelMenu = document.getElementById('excelContextMenu');
+    const mdMenu = document.getElementById('mdFileContextMenu');
     if (menu) menu.style.display = 'none';
     if (testcaseMenu) testcaseMenu.style.display = 'none';
     if (excelMenu) excelMenu.style.display = 'none';
+    if (mdMenu) mdMenu.style.display = 'none';
     document.removeEventListener('click', hideContextMenu);
     document.removeEventListener('contextmenu', hideContextMenu);
   }
@@ -250,6 +254,25 @@
     contextMenuTargetIsFolder = true;
 
     const menu = document.getElementById('testcaseFolderContextMenu');
+
+    // Generate Script / Stop Generation 메뉴 동적 변경
+    const generateMenuItem = menu.querySelector('#generateScriptMenuItem');
+    if (generateMenuItem) {
+      const isGenerating = typeof window.isGenerating === 'function' && window.isGenerating();
+      const icon = generateMenuItem.querySelector('i');
+      const label = generateMenuItem.querySelector('.context-menu-label');
+
+      if (isGenerating) {
+        if (icon) icon.className = 'codicon codicon-debug-stop';
+        if (label) label.textContent = 'Stop Generation';
+        generateMenuItem.onclick = () => window.stopGeneration();
+      } else {
+        if (icon) icon.className = 'codicon codicon-run-all';
+        if (label) label.textContent = 'Generate Script';
+        generateMenuItem.onclick = () => window.generateScriptsFromFolder();
+      }
+    }
+
     menu.style.display = 'block';
     menu.style.left = e.clientX + 'px';
     menu.style.top = e.clientY + 'px';
@@ -266,6 +289,35 @@
       document.addEventListener('click', hideContextMenu);
       document.addEventListener('contextmenu', hideContextMenu);
     }, 0);
+  }
+
+  function showMdFileContextMenu(e, filePath, fileName) {
+    contextMenuTargetPath = filePath;
+    contextMenuTargetName = fileName;
+    contextMenuTargetIsFolder = false;
+
+    const menu = document.getElementById('mdFileContextMenu');
+    menu.style.display = 'block';
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+      menu.style.left = (window.innerWidth - rect.width - 5) + 'px';
+    }
+    if (rect.bottom > window.innerHeight) {
+      menu.style.top = (window.innerHeight - rect.height - 5) + 'px';
+    }
+
+    setTimeout(() => {
+      document.addEventListener('click', hideContextMenu);
+      document.addEventListener('contextmenu', hideContextMenu);
+    }, 0);
+  }
+
+  function isMdFile(filePath) {
+    const ext = filePath.toLowerCase();
+    return ext.endsWith('.md');
   }
 
   // ===== 파일 아이콘 =====
@@ -397,6 +449,22 @@
   }
 
   function toggleMultiSelectItem(element, path, name, isFolder) {
+    // 첫 번째 Ctrl+클릭 시, 기존에 선택된 항목도 다중 선택에 추가
+    if (multiSelectedItems.size === 0 && selectedItemPath && selectedItemPath !== path) {
+      const selectedElement = document.querySelector(
+        `.tree-item.file[data-file="${CSS.escape(selectedItemPath)}"], .tree-item.folder[data-path="${CSS.escape(selectedItemPath)}"]`
+      );
+      if (selectedElement) {
+        multiSelectedItems.add({
+          path: selectedItemPath,
+          name: selectedItemName,
+          isFolder: selectedItemIsFolder,
+          element: selectedElement
+        });
+        selectedElement.classList.add('multi-selected');
+      }
+    }
+
     const existingItem = [...multiSelectedItems].find(item => item.path === path);
 
     if (existingItem) {
@@ -525,6 +593,27 @@
     }
 
     lastClickedItemPath = filePath;
+  }
+
+  // ===== 경로 복사 =====
+
+  function copyPath() {
+    const targetPath = contextMenuTargetPath;
+
+    hideContextMenu();
+
+    if (!targetPath) return;
+
+    navigator.clipboard.writeText(targetPath).then(() => {
+      if (typeof window.showToast === 'function') {
+        window.showToast('success', 'Path copied to clipboard');
+      }
+    }).catch(err => {
+      console.error('Failed to copy path:', err);
+      if (typeof window.showToast === 'function') {
+        window.showToast('error', 'Failed to copy path');
+      }
+    });
   }
 
   // ===== 이름 변경 =====
@@ -858,6 +947,151 @@
       e.preventDefault();
       startInlineRename(selectedItemPath, selectedItemName, selectedItemIsFolder);
     }
+
+    // 화살표 키 네비게이션
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      navigateExplorer(e.key === 'ArrowUp' ? -1 : 1);
+    }
+  }
+
+  // ===== 화살표 키 네비게이션 =====
+
+  function navigateExplorer(direction) {
+    // 보이는 모든 항목 수집 (확장된 폴더의 자식들만)
+    const visibleItems = getVisibleTreeItems();
+    if (visibleItems.length === 0) return;
+
+    // 현재 선택된 항목의 인덱스 찾기
+    let currentIndex = -1;
+    if (selectedItemPath) {
+      currentIndex = visibleItems.findIndex(item => {
+        const path = item.dataset.file || item.dataset.path;
+        return path === selectedItemPath;
+      });
+    }
+
+    // 다음/이전 항목 계산
+    let nextIndex;
+    if (currentIndex === -1) {
+      nextIndex = direction === 1 ? 0 : visibleItems.length - 1;
+    } else {
+      nextIndex = currentIndex + direction;
+      if (nextIndex < 0) nextIndex = 0;
+      if (nextIndex >= visibleItems.length) nextIndex = visibleItems.length - 1;
+    }
+
+    if (nextIndex === currentIndex) return;
+
+    const nextItem = visibleItems[nextIndex];
+    const isFolder = nextItem.dataset.type === 'folder';
+    const path = nextItem.dataset.file || nextItem.dataset.path;
+    const name = nextItem.querySelector('.tree-item-label')?.textContent || '';
+
+    // 이전 선택 해제
+    clearMultiSelection();
+    document.querySelectorAll('.tree-item.file').forEach(item => item.classList.remove('selected'));
+    document.querySelectorAll('.tree-item.folder').forEach(item => item.classList.remove('selected'));
+
+    // 새 항목 선택
+    nextItem.classList.add('selected');
+    selectedItemPath = path;
+    selectedItemName = name;
+    selectedItemIsFolder = isFolder;
+    lastClickedItemPath = path;
+
+    // 스크롤하여 보이게
+    nextItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    // 파일인 경우 현재 탭 내용 교체 (새 탭 열지 않음)
+    if (!isFolder && !isExcelFile(path)) {
+      replaceCurrentTabWithFile(path);
+    }
+  }
+
+  function getVisibleTreeItems() {
+    const items = [];
+    const allItems = document.querySelectorAll('.tree-item.file, .tree-item.folder:not(.root)');
+
+    allItems.forEach(item => {
+      // 부모 컨테이너들이 모두 expanded인지 확인
+      let parent = item.parentElement;
+      let isVisible = true;
+
+      while (parent && !parent.id?.includes('explorer')) {
+        if (parent.classList.contains('tree-item-children') && !parent.classList.contains('expanded')) {
+          isVisible = false;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+
+      if (isVisible) {
+        items.push(item);
+      }
+    });
+
+    return items;
+  }
+
+  async function replaceCurrentTabWithFile(filePath) {
+    const fileName = window.electronAPI.fs.path.basename(filePath);
+    const openTabs = window.getOpenTabs ? window.getOpenTabs() : [];
+    const activeTabIndex = window.getActiveTabIndex ? window.getActiveTabIndex() : -1;
+
+    // 이미 열린 탭인지 확인
+    const existingTabIndex = openTabs.findIndex(tab => tab.filePath === filePath);
+    if (existingTabIndex !== -1) {
+      // 이미 열려있으면 해당 탭으로 전환
+      if (typeof window.switchToTab === 'function') {
+        window.switchToTab(existingTabIndex);
+      }
+      return;
+    }
+
+    // 현재 활성 탭이 있고, 일반 파일 탭인 경우 내용 교체
+    if (activeTabIndex >= 0 && activeTabIndex < openTabs.length) {
+      const currentTab = openTabs[activeTabIndex];
+
+      // 특수 탭이 아닌 일반 파일 탭인 경우에만 교체
+      if (currentTab.type === 'text' && currentTab.filePath && !currentTab.filePath.startsWith('__')) {
+        // 변경사항이 없는 경우에만 교체
+        if (currentTab.content === currentTab.originalContent) {
+          // 이전 파일 감시 중지
+          if (currentTab.filePath) {
+            window.electronAPI.fileWatch.stop(currentTab.filePath);
+          }
+
+          // 새 파일 내용 읽기
+          const fileContent = await window.electronAPI.fs.readFile(filePath);
+          const isCanvas = fileName.endsWith('.canvas');
+
+          // 현재 탭 정보 업데이트
+          currentTab.filePath = filePath;
+          currentTab.fileName = fileName;
+          currentTab.type = isCanvas ? 'canvas' : 'text';
+          currentTab.content = fileContent;
+          currentTab.originalContent = fileContent;
+
+          // 새 파일 감시 시작
+          window.electronAPI.fileWatch.start(filePath);
+
+          // UI 업데이트
+          if (typeof window.renderTabs === 'function') {
+            window.renderTabs();
+          }
+          if (typeof window.renderActiveTabContent === 'function') {
+            window.renderActiveTabContent();
+          }
+          return;
+        }
+      }
+    }
+
+    // 교체할 수 없는 경우 (특수 탭이거나 변경사항 있음) 새 탭으로 열기
+    if (typeof window.openFileInEditor === 'function') {
+      window.openFileInEditor(filePath);
+    }
   }
 
   // ===== Getter 함수들 =====
@@ -902,6 +1136,7 @@
   window.getSelectedItems = getSelectedItems;
   window.toggleFolder = toggleFolder;
   window.selectFile = selectFile;
+  window.copyPath = copyPath;
   window.renameItem = renameItem;
   window.startInlineRename = startInlineRename;
   window.showDeleteConfirmation = showDeleteConfirmation;
