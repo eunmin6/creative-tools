@@ -177,6 +177,14 @@
       tabEl.appendChild(tabIcon);
       tabEl.appendChild(tabLabel);
       tabEl.appendChild(closeBtn);
+
+      // 탭 우클릭 컨텍스트 메뉴
+      tabEl.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showTabContextMenu(e, index);
+      });
+
       editorTabs.appendChild(tabEl);
 
       if (index === activeTabIndex) {
@@ -461,6 +469,7 @@
       'rs': 'rust', 'rb': 'ruby', 'php': 'php', 'sql': 'sql',
       'xml': 'xml', 'yaml': 'yaml', 'yml': 'yaml',
       'sh': 'shell', 'bash': 'shell', 'txt': 'plaintext',
+      'robot': 'robotframework',
     };
     return languageMap[ext] || 'plaintext';
   }
@@ -471,7 +480,7 @@
     const editorArea = document.querySelector('.editor-area');
     editorArea.innerHTML = `
       <div class="welcome-screen" style="align-items: flex-start; justify-content: flex-start; padding: 40px 60px; font-family: 'Segoe UI', sans-serif;">
-        <h1 style="font-size: 36px; font-weight: 600; margin-bottom: 40px;">Virtual Validation Tools</h1>
+        <h1 style="font-size: 36px; font-weight: 600; margin-bottom: 40px;">Validation Studio 1.0</h1>
         <div style="text-align: left;">
           <h2 style="font-size: 16px; font-weight: 600; color: #858585; text-transform: uppercase; margin-bottom: 12px;">Start</h2>
           <div class="welcome-link" onclick="openFolder()" style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 0; color: #3794ff; transition: color 0.2s; font-size: 14px;">
@@ -560,6 +569,69 @@
     return activeTabIndex;
   }
 
+  // ===== 탭 컨텍스트 메뉴 =====
+
+  let contextMenuTabIndex = -1;
+
+  function showTabContextMenu(e, tabIndex) {
+    contextMenuTabIndex = tabIndex;
+
+    const menu = document.getElementById('tabContextMenu');
+    if (!menu) return;
+
+    menu.style.display = 'block';
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+
+    // 화면 밖으로 나가지 않도록 조정
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+      menu.style.left = (window.innerWidth - rect.width - 5) + 'px';
+    }
+    if (rect.bottom > window.innerHeight) {
+      menu.style.top = (window.innerHeight - rect.height - 5) + 'px';
+    }
+
+    setTimeout(() => {
+      document.addEventListener('click', hideTabContextMenu);
+      document.addEventListener('contextmenu', hideTabContextMenu);
+    }, 0);
+  }
+
+  function hideTabContextMenu() {
+    const menu = document.getElementById('tabContextMenu');
+    if (menu) menu.style.display = 'none';
+    document.removeEventListener('click', hideTabContextMenu);
+    document.removeEventListener('contextmenu', hideTabContextMenu);
+  }
+
+  function closeCurrentTabFromMenu() {
+    hideTabContextMenu();
+    if (contextMenuTabIndex >= 0 && contextMenuTabIndex < openTabs.length) {
+      closeTab(contextMenuTabIndex);
+    }
+  }
+
+  function closeOtherTabs() {
+    hideTabContextMenu();
+    if (contextMenuTabIndex < 0 || contextMenuTabIndex >= openTabs.length) return;
+
+    const tabToKeep = openTabs[contextMenuTabIndex];
+    openTabs.length = 0;
+    openTabs.push(tabToKeep);
+    activeTabIndex = 0;
+    renderTabs();
+    renderActiveTabContent();
+  }
+
+  function closeAllTabs() {
+    hideTabContextMenu();
+    openTabs.length = 0;
+    activeTabIndex = -1;
+    renderTabs();
+    showWelcomeScreen();
+  }
+
   // ===== 전역 노출 =====
   window.openTabs = openTabs; // 직접 접근용 (호환성)
   window.getOpenTabs = getOpenTabs;
@@ -587,5 +659,10 @@
   window.hasUnsavedChanges = hasUnsavedChanges;
   window.saveCurrentFile = saveCurrentFile;
   window.addSpecialTab = addSpecialTab;
+  window.showTabContextMenu = showTabContextMenu;
+  window.hideTabContextMenu = hideTabContextMenu;
+  window.closeCurrentTabFromMenu = closeCurrentTabFromMenu;
+  window.closeOtherTabs = closeOtherTabs;
+  window.closeAllTabs = closeAllTabs;
 
 })();

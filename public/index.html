@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Virtual Validation Tools</title>
+    <title>Validation Studio 1.0</title>
     <link rel="stylesheet" href="codicon.css">
     <link rel="stylesheet" href="css/themes.css">
     <style>
@@ -53,9 +53,18 @@
             object-fit: contain;
         }
 
+        .titlebar-app-name {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-left: 6px;
+            white-space: nowrap;
+        }
+
         .titlebar-menu {
             display: flex;
             -webkit-app-region: no-drag;
+            margin-left: 20px;
         }
 
         .titlebar-menu-item {
@@ -101,6 +110,57 @@
 
         .dropdown-item:hover {
             background: var(--menu-hover);
+        }
+
+        /* 툴바 스타일 */
+        .toolbar {
+            display: flex;
+            align-items: center;
+            height: 40px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 8px;
+            gap: 4px;
+        }
+
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .toolbar-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 32px;
+            background: transparent;
+            border: none;
+            border-radius: 4px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .toolbar-button:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .toolbar-button:active {
+            background: var(--bg-active);
+        }
+
+        .toolbar-button i {
+            font-size: 24px;
+        }
+
+        .toolbar-separator {
+            width: 1px;
+            height: 24px;
+            background: var(--border-color);
+            margin: 0 4px;
         }
 
         .titlebar-controls {
@@ -339,7 +399,7 @@
         }
 
         .editor-tab {
-            padding: 8px 20px;
+            padding: 5px 16px;
             background: var(--tab-inactive-bg);
             border-right: 1px solid var(--border-color);
             cursor: pointer;
@@ -828,19 +888,19 @@
         }
 
         .output-line.info {
-            color: #75beff;
+            color: var(--info);
         }
 
         .output-line.success {
-            color: #89d185;
+            color: var(--success);
         }
 
         .output-line.error {
-            color: #f48771;
+            color: var(--error);
         }
 
         .output-line.warning {
-            color: #cca700;
+            color: var(--warning);
         }
 
         /* 터미널 스타일 */
@@ -892,11 +952,11 @@
         }
 
         .terminal-output-line.command {
-            color: #dcdcaa;
+            color: var(--warning);
         }
 
         .terminal-output-line.error {
-            color: #f48771;
+            color: var(--error);
         }
 
         /* 터미널 인스턴스 사이드바 */
@@ -1270,6 +1330,7 @@
     <div class="titlebar">
         <div class="titlebar-left">
             <img src="vvu-icon2.png" class="titlebar-icon" alt="icon">
+            <span class="titlebar-app-name">Validation Studio 1.0</span>
             <div class="titlebar-menu">
                 <div class="titlebar-menu-item menu-with-dropdown" id="fileMenu" onclick="toggleMenu('file', event)" onmouseenter="hoverMenu('file', event)">
                     File
@@ -1318,11 +1379,38 @@
         </div>
     </div>
 
+    <!-- 툴바 -->
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <button class="toolbar-button" onclick="openFolderFromMenu(event)" title="Open Folder">
+                <i class="codicon codicon-folder-opened"></i>
+            </button>
+            <button class="toolbar-button" onclick="saveCurrentFile()" title="Save">
+                <i class="codicon codicon-save"></i>
+            </button>
+        </div>
+        <div class="toolbar-separator"></div>
+        <div class="toolbar-group">
+            <button class="toolbar-button" onclick="toggleChatPanel(event)" title="Open Chat">
+                <i class="codicon codicon-comment-discussion"></i>
+            </button>
+            <button class="toolbar-button" onclick="toggleOutputPanel(event)" title="Toggle Output">
+                <i class="codicon codicon-output"></i>
+            </button>
+        </div>
+        <div class="toolbar-separator"></div>
+        <div class="toolbar-group">
+            <button class="toolbar-button" onclick="openAppearanceTab()" title="Theme">
+                <i class="codicon codicon-color-mode"></i>
+            </button>
+        </div>
+    </div>
+
     <div class="app-container">
         <!-- 왼쪽 아이콘 메뉴바 -->
         <div class="activity-bar">
-            <div class="activity-bar-item" data-view="explorer" title="Explorer">
-                <i class="codicon codicon-files"></i>
+            <div class="activity-bar-item" data-view="explorer" title="Project">
+                <i class="codicon codicon-package"></i>
             </div>
             <!-- 나중에 사용 예정 - 주석 처리
             <div class="activity-bar-item" data-view="search" title="Search">
@@ -1363,7 +1451,7 @@
                     </div>
                     <div class="editor-area">
                         <div class="welcome-screen" style="align-items: flex-start; justify-content: flex-start; padding: 40px 60px; font-family: 'Segoe UI', sans-serif;">
-                            <h1 style="font-size: 36px; font-weight: 600; margin-bottom: 40px;">Virtual Validation Tools</h1>
+                            <h1 style="font-size: 36px; font-weight: 600; margin-bottom: 40px;">Validation Studio 1.0</h1>
                             <div style="text-align: left;">
                                 <h2 style="font-size: 16px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 12px;">Start</h2>
                                 <div class="welcome-link" onclick="openFolder()" style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 0; color: #3794ff; transition: color 0.2s; font-size: 14px;">
@@ -1612,6 +1700,22 @@
         </div>
     </div>
 
+    <!-- 탭 컨텍스트 메뉴 -->
+    <div class="file-context-menu" id="tabContextMenu" style="display: none;">
+        <div class="context-menu-item" onclick="closeCurrentTabFromMenu()">
+            <i class="codicon codicon-close"></i>
+            <span class="context-menu-label">Close</span>
+        </div>
+        <div class="context-menu-item" onclick="closeOtherTabs()">
+            <i class="codicon codicon-close-all"></i>
+            <span class="context-menu-label">Close Others</span>
+        </div>
+        <div class="context-menu-item" onclick="closeAllTabs()">
+            <i class="codicon codicon-clear-all"></i>
+            <span class="context-menu-label">Close All</span>
+        </div>
+    </div>
+
     <!-- Monaco Editor 로더 -->
     <script src="vs/loader.js"></script>
     <script>
@@ -1631,6 +1735,7 @@
     <script src="js/modules/terminal.js"></script>
     <script src="js/modules/llm-setting.js"></script>
     <script src="js/modules/robot-generator.js"></script>
+    <script src="js/modules/robot-language.js"></script>
 
     <!-- 메인 렌더러 (View 전용 기능) -->
     <script src="renderer.js"></script>

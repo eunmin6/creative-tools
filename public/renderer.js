@@ -852,7 +852,7 @@ async function renderConfiguration() {
   editorArea.innerHTML = `
     <div class="configuration-screen" style="padding: 40px 60px; font-family: 'Segoe UI', sans-serif; max-width: 600px;">
       <h1 style="font-size: 28px; font-weight: 600; margin-bottom: 8px; color: #cccccc;">Configuration</h1>
-      <p style="font-size: 14px; color: #858585; margin-bottom: 32px;">Project settings for Virtual Validation Tools</p>
+      <p style="font-size: 14px; color: #858585; margin-bottom: 32px;">Project settings for Validation Studio</p>
 
       <div style="display: flex; flex-direction: column; gap: 24px;">
         <div class="config-section">
