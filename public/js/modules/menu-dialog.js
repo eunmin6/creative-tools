@@ -119,6 +119,14 @@
       configMenuItem.style.color = '#cccccc';
       configMenuItem.style.pointerEvents = 'auto';
     }
+
+    // 툴바 설정 버튼 활성화
+    const toolbarSettingsBtn = document.getElementById('toolbarSettingsBtn');
+    if (toolbarSettingsBtn) {
+      toolbarSettingsBtn.disabled = false;
+      toolbarSettingsBtn.style.opacity = '1';
+      toolbarSettingsBtn.style.cursor = 'pointer';
+    }
   }
 
   function disableConfigurationMenu() {
@@ -126,6 +134,14 @@
     if (configMenuItem) {
       configMenuItem.style.color = '#6e6e6e';
       configMenuItem.style.pointerEvents = 'none';
+    }
+
+    // 툴바 설정 버튼 비활성화
+    const toolbarSettingsBtn = document.getElementById('toolbarSettingsBtn');
+    if (toolbarSettingsBtn) {
+      toolbarSettingsBtn.disabled = true;
+      toolbarSettingsBtn.style.opacity = '0.4';
+      toolbarSettingsBtn.style.cursor = 'not-allowed';
     }
   }
 
