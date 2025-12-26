@@ -259,6 +259,12 @@
     activeTabIndex = index;
     renderTabs();
     renderActiveTabContent();
+
+    // 익스플로러에서 해당 파일 하이라이트
+    const tab = openTabs[index];
+    if (tab && tab.filePath && typeof window.highlightFileInExplorer === 'function') {
+      window.highlightFileInExplorer(tab.filePath);
+    }
   }
 
   // ===== 탭 닫기 =====
