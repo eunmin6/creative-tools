@@ -31,3 +31,8 @@ research.md
 
 # Temp files
 nul
+
+# Robot Framework test output
+log.html
+output.xml
+report.html
